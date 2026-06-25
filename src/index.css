@@ -1,0 +1,167 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
+
+:root {
+  /* Dynamic Color Palette */
+  --primary-color: #4F46E5;
+  --primary-hover: #4338CA;
+  --secondary-color: #10B981;
+  --bg-color: #F3F4F6;
+  --surface-color: rgba(255, 255, 255, 0.85);
+  --surface-color-solid: #FFFFFF;
+  --text-primary: #1F2937;
+  --text-secondary: #4B5563;
+  --danger-color: #EF4444;
+  --warning-color: #F59E0B;
+  --border-color: rgba(229, 231, 235, 0.5);
+  
+  /* Glassmorphism Tokens */
+  --glass-bg: rgba(255, 255, 255, 0.7);
+  --glass-border: rgba(255, 255, 255, 0.5);
+  --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
+  
+  /* Layout & Animations */
+  --sidebar-width: 260px;
+  --transition-speed: 0.3s;
+  --radius-lg: 16px;
+  --radius-md: 12px;
+  --radius-sm: 8px;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  background-color: var(--bg-color);
+  background-image: 
+    radial-gradient(at 0% 0%, hsla(253,16%,7%,0.05) 0, transparent 50%), 
+    radial-gradient(at 50% 0%, hsla(225,39%,30%,0.05) 0, transparent 50%), 
+    radial-gradient(at 100% 0%, hsla(339,49%,30%,0.05) 0, transparent 50%);
+  color: var(--text-primary);
+  line-height: 1.5;
+  min-height: 100vh;
+}
+
+/* Glassmorphism Utility Classes */
+.glass-panel {
+  background: var(--glass-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+  border-radius: var(--radius-lg);
+}
+
+.glass-card {
+  background: var(--surface-color);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+  border-radius: var(--radius-md);
+  transition: all var(--transition-speed) ease;
+}
+
+.glass-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  border-color: var(--primary-color);
+}
+
+/* Ant Design Overrides */
+.ant-btn-primary {
+  background: linear-gradient(135deg, var(--primary-color), var(--primary-hover)) !important;
+  border: none !important;
+  box-shadow: 0 4px 14px 0 rgba(79, 70, 229, 0.39) !important;
+  transition: all 0.3s ease !important;
+}
+
+.ant-btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(79, 70, 229, 0.4) !important;
+}
+
+.ant-menu {
+  background: transparent !important;
+  border-inline-end: none !important;
+}
+
+.ant-menu-item-selected {
+  background: rgba(79, 70, 229, 0.1) !important;
+  color: var(--primary-color) !important;
+  border-radius: var(--radius-md) !important;
+}
+
+.ant-menu-item {
+  border-radius: var(--radius-md) !important;
+  margin-bottom: 8px !important;
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.4s ease-out forwards;
+}
+
+@keyframes float {
+  0% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+  100% { transform: translateY(0px); }
+}
+
+.animate-float {
+  animation: float 6s ease-in-out infinite;
+}
+
+/* Ant Design Input, Select, DatePicker, and InputNumber unified height and styling */
+.ant-input,
+.ant-input-affix-wrapper,
+.ant-select,
+.ant-select-selector,
+.ant-picker,
+.ant-input-number {
+  height: 42px !important;
+  border-radius: 12px !important;
+}
+
+.ant-select-single .ant-select-selector {
+  display: flex !important;
+  align-items: center !important;
+  height: 42px !important;
+}
+
+.ant-select-single .ant-select-selection-item,
+.ant-select-single .ant-select-selection-placeholder {
+  line-height: 40px !important;
+}
+
+.ant-picker .ant-picker-input > input {
+  font-size: 14px;
+}
+
+.ant-input-affix-wrapper > input.ant-input {
+  height: 100% !important;
+  border-radius: 0 !important;
+}
+
+.ant-input-number-input-wrap > input.ant-input-number-input {
+  height: 40px !important;
+}
+
+/* Remove scrollbars globally while keeping scroll functionality */
+::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+* {
+  -ms-overflow-style: none !important; /* IE and Edge */
+  scrollbar-width: none !important; /* Firefox */
+}
