@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Card, Typography, Table, Tag, Input, Select, Space, Row, Col, Tooltip, Button, Modal, Form, InputNumber, DatePicker, Checkbox, Tabs, message } from 'antd';
-import { SearchOutlined, CalendarOutlined, PlusOutlined } from '@ant-design/icons';
+import { Card, Typography, Table, Tag, Input, Select, Space, Row, Col, Tooltip, Button, Modal, Form, InputNumber, DatePicker, Checkbox, Tabs, message, Popconfirm } from 'antd';
+import { SearchOutlined, CalendarOutlined, PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import { api } from '../../services/api';
 import dayjs from 'dayjs';
 
@@ -12,6 +12,7 @@ interface BatchInfo {
   expiryDate: string;
   quantity: number;
   reservedQty: number;
+  returnedQty: number;
   costPrice: number;
   manufacturingDate?: string | null;
   notes?: string | null;
@@ -25,6 +26,7 @@ interface StockItem {
   quantity: number;
   reservedQty: number;
   damagedQty: number;
+  returnedQty: number;
   reorderLevel: number;
   safetyStock: number;
   minStockLevel: number;
@@ -72,6 +74,11 @@ export const Inventory: React.FC = () => {
   const [branchesList, setBranchesList] = useState<any[]>([]);
   const [form] = Form.useForm();
 
+  // Edit Batch State
+  const [editingBatch, setEditingBatch] = useState<BatchInfo | null>(null);
+  const [isEditBatchOpen, setIsEditBatchOpen] = useState(false);
+  const [batchForm] = Form.useForm();
+
   // Tabs & Filters state
   const [activeTab, setActiveTab] = useState<string>('all'); // 'all' or 'expired'
   const [search, setSearch] = useState('');
@@ -90,7 +97,7 @@ export const Inventory: React.FC = () => {
 
   useEffect(() => {
     fetchStocks();
-  }, [search, selectedWarehouse, currentPage, pageSize]);
+  }, [search, selectedWarehouse, currentPage, pageSize, activeTab, warehouses]);
 
   const fetchWarehouses = async () => {
     try {
@@ -126,15 +133,76 @@ export const Inventory: React.FC = () => {
     }
   };
 
+  const handleEditBatch = (batch: BatchInfo) => {
+    setEditingBatch(batch);
+    batchForm.setFieldsValue({
+      quantity: Number(batch.quantity),
+      costPrice: Number(batch.costPrice),
+      expiryDate: dayjs(batch.expiryDate),
+      manufacturingDate: batch.manufacturingDate ? dayjs(batch.manufacturingDate) : null,
+      notes: batch.notes,
+      expiryAlertThreshold: batch.expiryAlertThreshold || 30,
+    });
+    setIsEditBatchOpen(true);
+  };
+
+  const handleUpdateBatchSubmit = async (values: any) => {
+    if (!editingBatch) return;
+    try {
+      setSubmitting(true);
+      const payload = {
+        ...values,
+        expiryDate: dayjs(values.expiryDate).toISOString(),
+        manufacturingDate: values.manufacturingDate ? dayjs(values.manufacturingDate).toISOString() : null,
+      };
+      
+      const res = await api.put(`/inventory/batches/${editingBatch.id}`, payload);
+      if (res.data.success) {
+        message.success('Stock batch updated successfully');
+        setIsEditBatchOpen(false);
+        setEditingBatch(null);
+        batchForm.resetFields();
+        fetchStocks();
+      }
+    } catch (err: any) {
+      message.error(err.response?.data?.message || 'Failed to update stock batch');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDeleteBatch = async (batchId: string) => {
+    try {
+      const res = await api.delete(`/inventory/batches/${batchId}`);
+      if (res.data.success) {
+        message.success('Stock batch deleted successfully');
+        fetchStocks();
+      }
+    } catch (err: any) {
+      message.error(err.response?.data?.message || 'Failed to delete stock batch');
+    }
+  };
+
   const fetchStocks = async () => {
     try {
       setLoading(true);
+      let whParam = selectedWarehouse === 'all' ? undefined : selectedWarehouse;
+
+      if (activeTab === 'hq') {
+        const hqWarehouse = warehouses.find(
+          (w) => w.code === 'WH-HQ' || w.name?.toLowerCase().includes('hq') || w.name?.toLowerCase().includes('main')
+        );
+        if (hqWarehouse) {
+          whParam = hqWarehouse.id;
+        }
+      }
+
       const res = await api.get('/inventory', {
         params: {
           page: currentPage,
           limit: pageSize,
           search: search || undefined,
-          warehouseId: selectedWarehouse === 'all' ? undefined : selectedWarehouse,
+          warehouseId: whParam,
         },
       });
       if (res.data.success) {
@@ -254,6 +322,12 @@ export const Inventory: React.FC = () => {
         render: (val: number) => <span style={{ color: val > 0 ? 'var(--warning-color)' : 'inherit' }}>{val}</span>,
       },
       {
+        title: 'Returned Qty',
+        dataIndex: 'returnedQty',
+        key: 'returnedQty',
+        render: (val: number) => <span style={{ color: val > 0 ? '#10B981' : 'inherit' }}>{val || 0}</span>,
+      },
+      {
         title: 'Available Qty',
         key: 'available',
         render: (_: any, batch: BatchInfo) => (
@@ -278,6 +352,29 @@ export const Inventory: React.FC = () => {
         dataIndex: 'notes',
         key: 'notes',
         render: (text: string | null) => text || '-',
+      },
+      {
+        title: 'Actions',
+        key: 'actions',
+        width: 100,
+        render: (_: any, batch: BatchInfo) => (
+          <Space size="small">
+            <Button
+              type="text"
+              size="small"
+              icon={<EditOutlined />}
+              onClick={() => handleEditBatch(batch)}
+            />
+            <Popconfirm
+              title="Delete this batch?"
+              description="This will decrement parent stock quantity accordingly."
+              onConfirm={() => handleDeleteBatch(batch.id)}
+              okButtonProps={{ danger: true }}
+            >
+              <Button type="text" size="small" danger icon={<DeleteOutlined />} />
+            </Popconfirm>
+          </Space>
+        ),
       }
     ];
 
@@ -365,6 +462,14 @@ export const Inventory: React.FC = () => {
       ),
     },
     {
+      title: 'Returned Qty',
+      dataIndex: 'returnedQty',
+      key: 'returnedQty',
+      render: (val: number, record: StockItem) => (
+        <span style={{ color: val > 0 ? '#10B981' : 'inherit' }}>{val || 0} {record.product.uom}</span>
+      ),
+    },
+    {
       title: 'Available Qty',
       key: 'available',
       render: (_: any, record: StockItem) => {
@@ -407,11 +512,15 @@ export const Inventory: React.FC = () => {
       {/* Tabs for All Stock vs Expired */}
       <Tabs 
         activeKey={activeTab} 
-        onChange={(key) => setActiveTab(key)}
+        onChange={(key) => {
+          setActiveTab(key);
+          setCurrentPage(1);
+        }}
         style={{ marginBottom: '20px' }}
         items={[
           { key: 'all', label: 'All Inventory Stock' },
-          { key: 'expired', label: 'Expired Inventory Only' }
+          { key: 'expired', label: 'Expired Inventory Only' },
+          { key: 'hq', label: 'HeadQuarter / Main Inventory' }
         ]}
       />
 
@@ -434,11 +543,12 @@ export const Inventory: React.FC = () => {
           <Col xs={24} sm={12} md={6}>
             <Select
               style={{ width: '100%', borderRadius: '12px' }}
-              value={selectedWarehouse}
+              value={activeTab === 'hq' ? (warehouses.find(w => w.code === 'WH-HQ' || w.name?.toLowerCase().includes('hq') || w.name?.toLowerCase().includes('main'))?.id || 'all') : selectedWarehouse}
               onChange={(val) => {
                 setSelectedWarehouse(val);
                 setCurrentPage(1);
               }}
+              disabled={activeTab === 'hq'}
             >
               <Select.Option value="all">All Warehouses</Select.Option>
               {warehouses.map((wh) => (
@@ -614,6 +724,93 @@ export const Inventory: React.FC = () => {
             <Space>
               <Button onClick={() => setIsModalOpen(false)}>Cancel</Button>
               <Button type="primary" htmlType="submit" loading={submitting}>Submit</Button>
+            </Space>
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      {/* Edit Batch Modal */}
+      <Modal
+        title={`Edit Stock Batch: ${editingBatch?.batchNumber || ''}`}
+        open={isEditBatchOpen}
+        onCancel={() => { setIsEditBatchOpen(false); setEditingBatch(null); batchForm.resetFields(); }}
+        footer={null}
+        destroyOnClose
+      >
+        <Form
+          form={batchForm}
+          layout="vertical"
+          onFinish={handleUpdateBatchSubmit}
+          style={{ marginTop: '20px' }}
+        >
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                name="quantity"
+                label="Physical Stock Qty"
+                rules={[
+                  { required: true, message: 'Please input quantity!' },
+                  { type: 'number', min: 0, message: 'Qty must be at least 0' }
+                ]}
+              >
+                <InputNumber style={{ width: '100%', borderRadius: '8px' }} placeholder="Total units" />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                name="costPrice"
+                label="Unit Cost Price (MMK)"
+                rules={[
+                  { required: true, message: 'Please input cost price!' },
+                  { type: 'number', min: 0, message: 'Cost must be positive' }
+                ]}
+              >
+                <InputNumber style={{ width: '100%', borderRadius: '8px' }} placeholder="Buying price per unit" />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                name="manufacturingDate"
+                label="Manufacturing Date (Optional)"
+              >
+                <DatePicker style={{ width: '100%', borderRadius: '8px' }} placeholder="Select Mfg date" />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                name="expiryDate"
+                label="Expiry Date"
+                rules={[{ required: true, message: 'Please select expiry date!' }]}
+              >
+                <DatePicker style={{ width: '100%', borderRadius: '8px' }} placeholder="Select expiry date" />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Form.Item
+            name="expiryAlertThreshold"
+            label="Expiry Alert Configuration"
+            rules={[{ required: true, message: 'Please select alert setting!' }]}
+          >
+            <Select placeholder="Alert threshold" style={{ borderRadius: '8px' }}>
+              <Select.Option value={30}>30 Days before expiry</Select.Option>
+              <Select.Option value={60}>60 Days before expiry</Select.Option>
+              <Select.Option value={90}>90 Days before expiry</Select.Option>
+              <Select.Option value={180}>180 Days before expiry</Select.Option>
+            </Select>
+          </Form.Item>
+
+          <Form.Item name="notes" label="Cost Notes / Details">
+            <Input.TextArea rows={3} placeholder="Write inventory batch details..." style={{ borderRadius: '8px' }} />
+          </Form.Item>
+
+          <Form.Item style={{ textAlign: 'right', marginBottom: 0 }}>
+            <Space>
+              <Button onClick={() => { setIsEditBatchOpen(false); setEditingBatch(null); batchForm.resetFields(); }}>Cancel</Button>
+              <Button type="primary" htmlType="submit" loading={submitting}>Save Changes</Button>
             </Space>
           </Form.Item>
         </Form>

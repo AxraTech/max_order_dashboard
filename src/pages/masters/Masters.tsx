@@ -1,7 +1,7 @@
 import React from 'react';
 import { Card, Col, Row, Typography } from 'antd';
 import { useNavigate } from 'react-router-dom';
-import { DatabaseOutlined, ShopOutlined, TeamOutlined, EnvironmentOutlined, IdcardOutlined } from '@ant-design/icons';
+import { DatabaseOutlined, ShopOutlined, TeamOutlined, EnvironmentOutlined, IdcardOutlined, ContactsOutlined, AuditOutlined } from '@ant-design/icons';
 
 const { Title, Text } = Typography;
 
@@ -10,7 +10,10 @@ const items = [
   { title: 'Products', path: '/products', icon: <ShopOutlined /> },
   { title: 'Branches', path: '/branches', icon: <EnvironmentOutlined /> },
   { title: 'Sales Representatives', path: '/sales-reps', icon: <IdcardOutlined /> },
+  { title: 'Sales Teams', path: '/sales-teams', icon: <TeamOutlined /> },
   { title: 'Inventory', path: '/inventory', icon: <DatabaseOutlined /> },
+  { title: 'Suppliers', path: '/suppliers', icon: <ContactsOutlined /> },
+  { title: 'Dealers', path: '/dealers', icon: <AuditOutlined /> },
 ];
 
 export const Masters: React.FC = () => {

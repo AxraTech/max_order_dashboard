@@ -5,7 +5,7 @@ import {
 } from 'antd';
 import {
   ReloadOutlined, SearchOutlined, PlusOutlined, EditOutlined,
-  DeleteOutlined, EyeOutlined, PhoneOutlined, MailOutlined
+  DeleteOutlined, EyeOutlined, TeamOutlined
 } from '@ant-design/icons';
 import { api } from '../../services/api';
 
@@ -19,94 +19,98 @@ interface UserInfo {
   phone?: string | null;
 }
 
+interface SalesRepInfo {
+  id: string;
+  code: string;
+  user: UserInfo;
+}
+
+interface SalesTeamRecord {
+  id: string;
+  code: string;
+  name: string;
+  description?: string | null;
+  isActive: boolean;
+  branch: { id: string; name: string; code: string };
+  leader?: SalesRepInfo | null;
+  _count: { members: number };
+  createdAt: string;
+  updatedAt: string;
+}
+
 interface BranchInfo {
   id: string;
   code: string;
   name: string;
 }
 
-interface TerritoryInfo {
-  id: string;
-  code: string;
-  name: string;
-  region: string;
-}
-
-interface SalesRepRecord {
-  id: string;
-  code: string;
-  type: 'SR' | 'MSR';
-  user: UserInfo;
-  branch: BranchInfo;
-  territory?: TerritoryInfo | null;
-  team?: { id: string; name: string; code: string } | null;
-  isActive: boolean;
-  _count: { orders: number; customerSalesReps: number };
-}
-
-export const SalesReps: React.FC = () => {
+export const SalesTeams: React.FC = () => {
   // Loading & Data State
   const [loading, setLoading] = useState(false);
-  const [items, setItems] = useState<SalesRepRecord[]>([]);
+  const [items, setItems] = useState<SalesTeamRecord[]>([]);
   const [branches, setBranches] = useState<BranchInfo[]>([]);
-  const [territories, setTerritories] = useState<TerritoryInfo[]>([]);
-  
+  const [salesReps, setSalesReps] = useState<SalesRepInfo[]>([]);
+  const [repsLoading, setRepsLoading] = useState(false);
+
   // Pagination & Filters State
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [search, setSearch] = useState('');
-  const [type, setType] = useState('');
+  const [branchFilter, setBranchFilter] = useState('');
   const [activeFilter, setActiveFilter] = useState('all');
 
   // Create / Edit Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingRecord, setEditingRecord] = useState<SalesRepRecord | null>(null);
+  const [editingRecord, setEditingRecord] = useState<SalesTeamRecord | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [form] = Form.useForm();
-  const [salesTeams, setSalesTeams] = useState<any[]>([]);
+  
+  // Watch branchId selection in form to fetch representative list dynamically
   const selectedBranchId = Form.useWatch('branchId', form);
 
   // Detail Modal State
-  const [detailRecord, setDetailRecord] = useState<SalesRepRecord | null>(null);
+  const [detailRecord, setDetailRecord] = useState<any | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
 
-  // Fetch branches & territories once
+  // Fetch branches once
   useEffect(() => {
     api.get('/branches').then(res => {
       if (res.data.success) setBranches(res.data.data);
     }).catch(() => {});
-    
-    api.get('/territories').then(res => {
-      if (res.data.success) setTerritories(res.data.data);
-    }).catch(() => {});
   }, []);
 
-  // Fetch sales teams when branch changes in form
+  // Fetch sales representatives when branch changes in form
   useEffect(() => {
     if (selectedBranchId) {
-      api.get('/sales-teams', { params: { branchId: selectedBranchId, limit: 100 } })
+      setRepsLoading(true);
+      api.get('/sales-reps', { params: { branchId: selectedBranchId, limit: 100 } })
         .then(res => {
           if (res.data.success) {
-            setSalesTeams(res.data.data);
+            setSalesReps(res.data.data);
           }
         })
-        .catch(() => {});
+        .catch(() => {
+          message.error('Failed to load representatives for selected branch');
+        })
+        .finally(() => {
+          setRepsLoading(false);
+        });
     } else {
-      setSalesTeams([]);
+      setSalesReps([]);
     }
   }, [selectedBranchId]);
 
-  // Fetch Sales Representatives
+  // Fetch Sales Teams
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await api.get('/sales-reps', {
+      const res = await api.get('/sales-teams', {
         params: {
           page,
           limit: pageSize,
           search: search || undefined,
-          type: type || undefined,
+          branchId: branchFilter || undefined,
           isActive: activeFilter !== 'all' ? String(activeFilter === 'active') : 'all',
         }
       });
@@ -115,11 +119,11 @@ export const SalesReps: React.FC = () => {
         setTotal(res.data.meta?.total || 0);
       }
     } catch (err: any) {
-      message.error(err.response?.data?.message || 'Failed to load sales representatives');
+      message.error(err.response?.data?.message || 'Failed to load sales teams');
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, search, type, activeFilter]);
+  }, [page, pageSize, search, branchFilter, activeFilter]);
 
   useEffect(() => {
     fetchData();
@@ -130,9 +134,8 @@ export const SalesReps: React.FC = () => {
     setEditingRecord(null);
     form.resetFields();
     form.setFieldsValue({
-      type: 'SR',
       isActive: true,
-      teamId: null,
+      memberIds: [],
     });
     if (branches.length > 0) {
       form.setFieldValue('branchId', branches[0].id);
@@ -141,40 +144,41 @@ export const SalesReps: React.FC = () => {
   };
 
   // ---- Open Edit Modal ----
-  const handleEdit = (record: SalesRepRecord) => {
-    setEditingRecord(record);
-    form.setFieldsValue({
-      firstName: record.user.firstName,
-      lastName: record.user.lastName,
-      email: record.user.email,
-      phone: record.user.phone || '',
-      type: record.type,
-      branchId: record.branch?.id || null,
-      territoryId: record.territory?.id || null,
-      teamId: record.team?.id || null,
-      isActive: record.isActive,
-      password: '', // Leave blank unless changing
-    });
-    setIsModalOpen(true);
+  const handleEdit = async (record: SalesTeamRecord) => {
+    try {
+      setLoading(true);
+      // Fetch details to get all member IDs
+      const res = await api.get(`/sales-teams/${record.id}`);
+      if (res.data.success) {
+        const fullDetails = res.data.data;
+        setEditingRecord(record);
+        form.setFieldsValue({
+          name: fullDetails.name,
+          description: fullDetails.description || '',
+          branchId: fullDetails.branchId || fullDetails.branch?.id,
+          leaderId: fullDetails.leaderId || null,
+          memberIds: fullDetails.members?.map((m: any) => m.id) || [],
+          isActive: fullDetails.isActive,
+        });
+        setIsModalOpen(true);
+      }
+    } catch (err: any) {
+      message.error('Failed to load team details for edit');
+    } finally {
+      setLoading(false);
+    }
   };
 
   // ---- Submit Form ----
   const handleSubmit = async (values: any) => {
     try {
       setSubmitting(true);
-      
-      // Clean password field if empty
-      const payload = { ...values };
-      if (!payload.password) {
-        delete payload.password;
-      }
-
       if (editingRecord) {
-        await api.put(`/sales-reps/${editingRecord.id}`, payload);
-        message.success('Sales representative updated successfully');
+        await api.put(`/sales-teams/${editingRecord.id}`, values);
+        message.success('Sales team updated successfully');
       } else {
-        await api.post('/sales-reps', payload);
-        message.success('Sales representative created successfully');
+        await api.post('/sales-teams', values);
+        message.success('Sales team created successfully');
       }
       setIsModalOpen(false);
       form.resetFields();
@@ -186,27 +190,30 @@ export const SalesReps: React.FC = () => {
     }
   };
 
-  // ---- Delete Sales Rep ----
+  // ---- Delete Sales Team ----
   const handleDelete = async (id: string) => {
     try {
-      await api.delete(`/sales-reps/${id}`);
-      message.success('Sales representative deleted/deactivated successfully');
+      await api.delete(`/sales-teams/${id}`);
+      message.success('Sales team disbanded successfully');
       fetchData();
     } catch (err: any) {
-      message.error(err.response?.data?.message || 'Failed to delete');
+      message.error(err.response?.data?.message || 'Failed to delete sales team');
     }
   };
 
   // ---- View Details ----
   const handleViewDetail = async (id: string) => {
     try {
-      const res = await api.get(`/sales-reps/${id}`);
+      setLoading(true);
+      const res = await api.get(`/sales-teams/${id}`);
       if (res.data.success) {
         setDetailRecord(res.data.data);
         setDetailOpen(true);
       }
     } catch {
-      message.error('Failed to load sales representative details');
+      message.error('Failed to load sales team details');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -215,13 +222,13 @@ export const SalesReps: React.FC = () => {
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 16 }}>
         <div>
-          <Title level={2} style={{ margin: 0, fontWeight: 700 }}>Sales Representatives</Title>
-          <Text type="secondary">SR/MSR assignments, branch ownership, and activity</Text>
+          <Title level={2} style={{ margin: 0, fontWeight: 700 }}>Sales Teams</Title>
+          <Text type="secondary">Organize representatives into teams, assign leaders, and manage branches</Text>
         </div>
         <Space>
           <Button icon={<ReloadOutlined />} onClick={fetchData}>Refresh</Button>
           <Button type="primary" icon={<PlusOutlined />} onClick={handleCreate} style={{ borderRadius: '12px' }}>
-            Add Sales Rep
+            Add Sales Team
           </Button>
         </Space>
       </div>
@@ -238,13 +245,14 @@ export const SalesReps: React.FC = () => {
             style={{ width: 280, borderRadius: '12px' }}
           />
           <Select
-            value={type || 'all'}
-            style={{ width: 160, borderRadius: '12px' }}
-            onChange={(v) => { setType(v === 'all' ? '' : v); setPage(1); }}
+            value={branchFilter || 'all'}
+            style={{ width: 200, borderRadius: '12px' }}
+            onChange={(v) => { setBranchFilter(v === 'all' ? '' : v); setPage(1); }}
           >
-            <Select.Option value="all">All Types</Select.Option>
-            <Select.Option value="SR">SR</Select.Option>
-            <Select.Option value="MSR">MSR</Select.Option>
+            <Select.Option value="all">All Branches</Select.Option>
+            {branches.map(b => (
+              <Select.Option key={b.id} value={b.id}>{b.name}</Select.Option>
+            ))}
           </Select>
           <Select
             value={activeFilter}
@@ -279,42 +287,31 @@ export const SalesReps: React.FC = () => {
               render: (v) => <Text code strong>{v}</Text>
             },
             {
-              title: 'Name',
-              render: (_, r) => (
+              title: 'Team Name',
+              dataIndex: 'name',
+              render: (v, r) => (
                 <div>
-                  <Text strong style={{ color: '#111827' }}>{r.user.firstName} {r.user.lastName}</Text>
-                  <br />
-                  <Text type="secondary" style={{ fontSize: 12 }}>{r.user.email}</Text>
+                  <Text strong style={{ color: '#111827' }}>{v}</Text>
+                  {r.description && <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{r.description}</div>}
                 </div>
               )
-            },
-            {
-              title: 'Type',
-              dataIndex: 'type',
-              width: 100,
-              render: (v) => <Tag color={v === 'MSR' ? 'purple' : 'blue'} style={{ borderRadius: 8, fontWeight: 600, border: 'none' }}>{v}</Tag>
             },
             {
               title: 'Branch',
               render: (_, r) => <Text>{r.branch?.name || '-'}</Text>
             },
             {
-              title: 'Team',
-              render: (_, r) => r.team ? <Text strong>{r.team.name}</Text> : <Text type="secondary" italic>No Team</Text>
+              title: 'Team Leader',
+              render: (_, r) => r.leader ? (
+                <Text strong>{r.leader.user.firstName} {r.leader.user.lastName}</Text>
+              ) : (
+                <Text type="secondary" italic>No Leader</Text>
+              )
             },
             {
-              title: 'Territory',
-              render: (_, r) => <Text>{r.territory ? `${r.territory.name} (${r.territory.region})` : '-'}</Text>
-            },
-            {
-              title: 'Customers',
-              width: 110,
-              render: (_, r) => <Badge count={r._count?.customerSalesReps ?? 0} showZero color="#6366F1" style={{ borderRadius: 6 }} />
-            },
-            {
-              title: 'Orders',
-              width: 100,
-              render: (_, r) => <Badge count={r._count?.orders ?? 0} showZero color="#10B981" style={{ borderRadius: 6 }} />
+              title: 'Members Count',
+              width: 130,
+              render: (_, r) => <Badge count={r._count?.members ?? 0} showZero color="#4F46E5" style={{ borderRadius: 6 }} />
             },
             {
               title: 'Status',
@@ -337,13 +334,13 @@ export const SalesReps: React.FC = () => {
                     <Button type="text" size="small" icon={<EditOutlined />} onClick={() => handleEdit(r)} />
                   </Tooltip>
                   <Popconfirm
-                    title="Delete this representative?"
-                    description="Assigned orders will not be deleted. If they have active orders, they will be deactivated."
+                    title="Disband this sales team?"
+                    description="All team members will be disassociated. This action cannot be undone."
                     onConfirm={() => handleDelete(r.id)}
-                    okText="Delete"
+                    okText="Disband"
                     okButtonProps={{ danger: true }}
                   >
-                    <Tooltip title="Delete">
+                    <Tooltip title="Disband">
                       <Button type="text" size="small" danger icon={<DeleteOutlined />} />
                     </Tooltip>
                   </Popconfirm>
@@ -356,7 +353,7 @@ export const SalesReps: React.FC = () => {
 
       {/* Create / Edit Modal */}
       <Modal
-        title={<span style={{ fontWeight: 700, fontSize: 18 }}>{editingRecord ? 'Edit Sales Representative' : 'Create Sales Representative'}</span>}
+        title={<span style={{ fontWeight: 700, fontSize: 18 }}>{editingRecord ? 'Edit Sales Team' : 'Create Sales Team'}</span>}
         open={isModalOpen}
         onCancel={() => { setIsModalOpen(false); form.resetFields(); }}
         footer={null}
@@ -365,79 +362,35 @@ export const SalesReps: React.FC = () => {
       >
         <Form form={form} layout="vertical" onFinish={handleSubmit} style={{ marginTop: 20 }}>
           <Row gutter={16}>
-            <Col span={12}>
-              <Form.Item name="firstName" label="First Name" rules={[{ required: true, message: 'Please input first name!' }]}>
-                <Input placeholder="e.g. John" style={{ borderRadius: '8px' }} />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item name="lastName" label="Last Name" rules={[{ required: true, message: 'Please input last name!' }]}>
-                <Input placeholder="e.g. Doe" style={{ borderRadius: '8px' }} />
+            <Col span={24}>
+              <Form.Item name="name" label="Team Name" rules={[{ required: true, message: 'Please input team name!' }]}>
+                <Input placeholder="e.g. Yangon Alpha Team" style={{ borderRadius: '8px' }} />
               </Form.Item>
             </Col>
           </Row>
 
           <Row gutter={16}>
-            <Col span={12}>
-              <Form.Item
-                name="email"
-                label="Email (for login)"
-                rules={[
-                  { required: true, message: 'Please input email!' },
-                  { type: 'email', message: 'Please enter a valid email!' }
-                ]}
-              >
-                <Input placeholder="e.g. rep@example.com" style={{ borderRadius: '8px' }} />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item name="phone" label="Phone">
-                <Input placeholder="e.g. 09-12345678" style={{ borderRadius: '8px' }} />
+            <Col span={24}>
+              <Form.Item name="description" label="Description">
+                <Input.TextArea rows={2} placeholder="Optional team description..." style={{ borderRadius: '8px' }} />
               </Form.Item>
             </Col>
           </Row>
 
           <Row gutter={16}>
-            <Col span={12}>
-              <Form.Item
-                name="password"
-                label={editingRecord ? 'Change Password' : 'Password'}
-                rules={editingRecord ? [] : [{ required: true, message: 'Password is required!' }, { min: 6, message: 'Password must be at least 6 characters' }]}
-              >
-                <Input.Password placeholder={editingRecord ? 'Leave empty to keep current password' : 'Login password'} style={{ borderRadius: '8px' }} />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item name="type" label="Type" rules={[{ required: true }]}>
-                <Select style={{ borderRadius: '8px' }}>
-                  <Select.Option value="SR">Sales Representative (SR)</Select.Option>
-                  <Select.Option value="MSR">Medical Sales Rep (MSR)</Select.Option>
-                </Select>
-              </Form.Item>
-            </Col>
-          </Row>
-
-          <Row gutter={16}>
-            <Col span={12}>
+            <Col span={24}>
               <Form.Item name="branchId" label="Branch" rules={[{ required: true, message: 'Please select a branch!' }]}>
                 <Select
                   placeholder="Select branch"
                   style={{ borderRadius: '8px' }}
+                  disabled={!!editingRecord}
                   onChange={() => {
-                    form.setFieldValue('teamId', null);
+                    // Reset leader and members when branch changes
+                    form.setFieldsValue({ leaderId: null, memberIds: [] });
                   }}
                 >
                   {branches.map(b => (
                     <Select.Option key={b.id} value={b.id}>{b.name} ({b.code})</Select.Option>
-                  ))}
-                </Select>
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item name="territoryId" label="Territory">
-                <Select placeholder="Select territory" allowClear style={{ borderRadius: '8px' }}>
-                  {territories.map(t => (
-                    <Select.Option key={t.id} value={t.id}>{t.name} ({t.region})</Select.Option>
                   ))}
                 </Select>
               </Form.Item>
@@ -447,18 +400,46 @@ export const SalesReps: React.FC = () => {
           <Row gutter={16}>
             <Col span={24}>
               <Form.Item
-                name="teamId"
-                label="Sales Team"
-                help={!selectedBranchId ? "Please select a branch first to see available teams" : undefined}
+                name="leaderId"
+                label="Team Leader"
+                help={!selectedBranchId ? "Please select a branch first to see available representatives" : undefined}
               >
                 <Select
-                  placeholder="Select team (optional)"
+                  placeholder="Select leader (optional)"
                   allowClear
                   style={{ borderRadius: '8px' }}
-                  disabled={!selectedBranchId}
+                  disabled={!selectedBranchId || repsLoading}
+                  loading={repsLoading}
                 >
-                  {salesTeams.map(st => (
-                    <Select.Option key={st.id} value={st.id}>{st.name} ({st.code})</Select.Option>
+                  {salesReps.map(sr => (
+                    <Select.Option key={sr.id} value={sr.id}>
+                      {sr.user.firstName} {sr.user.lastName} ({sr.code})
+                    </Select.Option>
+                  ))}
+                </Select>
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Row gutter={16}>
+            <Col span={24}>
+              <Form.Item
+                name="memberIds"
+                label="Team Members"
+                help={!selectedBranchId ? "Please select a branch first to see available representatives" : undefined}
+              >
+                <Select
+                  mode="multiple"
+                  placeholder="Select team members (optional)"
+                  style={{ borderRadius: '8px' }}
+                  disabled={!selectedBranchId || repsLoading}
+                  loading={repsLoading}
+                  optionFilterProp="children"
+                >
+                  {salesReps.map(sr => (
+                    <Select.Option key={sr.id} value={sr.id}>
+                      {sr.user.firstName} {sr.user.lastName} ({sr.code})
+                    </Select.Option>
                   ))}
                 </Select>
               </Form.Item>
@@ -488,7 +469,7 @@ export const SalesReps: React.FC = () => {
 
       {/* Details Modal */}
       <Modal
-        title={<span style={{ fontWeight: 700, fontSize: 18 }}>Sales Representative Details</span>}
+        title={<span style={{ fontWeight: 700, fontSize: 18 }}>Sales Team Details</span>}
         open={detailOpen}
         onCancel={() => setDetailOpen(false)}
         footer={null}
@@ -496,37 +477,71 @@ export const SalesReps: React.FC = () => {
         destroyOnClose
       >
         {detailRecord && (
-          <Space orientation="vertical" size="middle" style={{ width: '100%', marginTop: 16 }}>
+          <Space direction="vertical" size="middle" style={{ width: '100%', marginTop: 16 }}>
             <Descriptions bordered size="small" column={2}>
-              <Descriptions.Item label="Code">
+              <Descriptions.Item label="Team Code">
                 <Text code strong>{detailRecord.code}</Text>
               </Descriptions.Item>
-              <Descriptions.Item label="Type">
-                <Tag color={detailRecord.type === 'MSR' ? 'purple' : 'blue'} style={{ borderRadius: 8, fontWeight: 600, border: 'none' }}>
-                  {detailRecord.type}
-                </Tag>
-              </Descriptions.Item>
-              <Descriptions.Item label="First Name">{detailRecord.user.firstName}</Descriptions.Item>
-              <Descriptions.Item label="Last Name">{detailRecord.user.lastName}</Descriptions.Item>
-              <Descriptions.Item label="Email" span={2}>
-                <MailOutlined style={{ marginRight: 8, color: 'var(--text-secondary)' }} />
-                {detailRecord.user.email}
-              </Descriptions.Item>
-              <Descriptions.Item label="Phone" span={2}>
-                <PhoneOutlined style={{ marginRight: 8, color: 'var(--text-secondary)' }} />
-                {detailRecord.user.phone || '—'}
-              </Descriptions.Item>
+              <Descriptions.Item label="Team Name">{detailRecord.name}</Descriptions.Item>
               <Descriptions.Item label="Branch">{detailRecord.branch?.name || '—'}</Descriptions.Item>
-              <Descriptions.Item label="Sales Team">{detailRecord.team?.name || '—'}</Descriptions.Item>
-              <Descriptions.Item label="Territory">
-                {detailRecord.territory ? `${detailRecord.territory.name} (${detailRecord.territory.region})` : '—'}
-              </Descriptions.Item>
               <Descriptions.Item label="Status">
                 <Badge status={detailRecord.isActive ? 'success' : 'error'} text={detailRecord.isActive ? 'Active' : 'Inactive'} />
               </Descriptions.Item>
-              <Descriptions.Item label="Total Orders">{detailRecord._count?.orders ?? 0}</Descriptions.Item>
-              <Descriptions.Item label="Assigned Customers">{detailRecord._count?.customerSalesReps ?? 0}</Descriptions.Item>
+              <Descriptions.Item label="Team Leader" span={2}>
+                {detailRecord.leader ? (
+                  <div>
+                    <Text strong>{detailRecord.leader.user.firstName} {detailRecord.leader.user.lastName}</Text>
+                    <Text type="secondary" style={{ marginLeft: 8 }}>({detailRecord.leader.code})</Text>
+                    <br />
+                    <Text type="secondary" style={{ fontSize: 12 }}>{detailRecord.leader.user.email} {detailRecord.leader.user.phone ? `| ${detailRecord.leader.user.phone}` : ''}</Text>
+                  </div>
+                ) : (
+                  <Text type="secondary" italic>No Leader Assigned</Text>
+                )}
+              </Descriptions.Item>
+              {detailRecord.description && (
+                <Descriptions.Item label="Description" span={2}>
+                  {detailRecord.description}
+                </Descriptions.Item>
+              )}
             </Descriptions>
+
+            <div>
+              <Title level={5} style={{ margin: '8px 0' }}>
+                <TeamOutlined style={{ marginRight: 8 }} />
+                Team Members ({detailRecord.members?.length || 0})
+              </Title>
+              {detailRecord.members && detailRecord.members.length > 0 ? (
+                <Table
+                  dataSource={detailRecord.members.map((m: any) => ({ ...m, key: m.id }))}
+                  size="small"
+                  pagination={false}
+                  columns={[
+                    {
+                      title: 'Code',
+                      dataIndex: 'code',
+                      render: (v: any) => <Text code>{v}</Text>
+                    },
+                    {
+                      title: 'Name',
+                      render: (_, m: any) => <Text strong>{m.user.firstName} {m.user.lastName}</Text>
+                    },
+                    {
+                      title: 'Territory',
+                      render: (_, m: any) => m.territory ? `${m.territory.name} (${m.territory.region})` : '—'
+                    },
+                    {
+                      title: 'Phone',
+                      render: (_, m: any) => m.user.phone || '—'
+                    }
+                  ]}
+                />
+              ) : (
+                <Card style={{ textAlign: 'center', background: 'rgba(0,0,0,0.02)', borderStyle: 'dashed' }}>
+                  <Text type="secondary" italic>No members in this team yet.</Text>
+                </Card>
+              )}
+            </div>
 
             <div style={{ textAlign: 'right' }}>
               <Space>
@@ -538,7 +553,7 @@ export const SalesReps: React.FC = () => {
                     handleEdit(detailRecord);
                   }}
                 >
-                  Edit Rep
+                  Edit Team
                 </Button>
               </Space>
             </div>

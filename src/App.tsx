@@ -23,9 +23,15 @@ import { Delivery } from './pages/delivery/Delivery';
 import { SalesReps } from './pages/sales-reps/SalesReps';
 import { Credit } from './pages/credit/Credit';
 import { Reports } from './pages/reports/Reports';
+import { SalesReturns } from './pages/sales-returns/SalesReturns';
 import { Masters } from './pages/masters/Masters';
 import { Administration } from './pages/administration/Administration';
 import { AuditLogs } from './pages/audit-logs/AuditLogs';
+import { Suppliers } from './pages/suppliers/Suppliers';
+import { Dealers } from './pages/dealers/Dealers';
+import { PurchaseOrders } from './pages/purchase-orders/PurchaseOrders';
+import { SalesTeams } from './pages/sales-teams/SalesTeams';
+import { Promotions } from './pages/promotions/Promotions';
 
 export const App: React.FC = () => {
   const { checkAuth } = useAuthStore();
@@ -84,9 +90,11 @@ export const App: React.FC = () => {
               <Route path="/dashboard" element={<Dashboard />} />
               
               <Route path="/orders" element={<Orders />} />
+              <Route path="/sales-returns" element={<SalesReturns />} />
               <Route path="/invoices" element={<Invoices />} />
               <Route path="/customers" element={<Customers />} />
               <Route path="/products" element={<Products />} />
+              <Route path="/promotions" element={<Promotions />} />
               <Route path="/branches" element={<Branches />} />
               <Route path="/users" element={<Users />} />
               <Route path="/roles" element={<Roles />} />
@@ -95,9 +103,13 @@ export const App: React.FC = () => {
               <Route path="/delivery" element={<Delivery />} />
               
               <Route path="/sales-reps" element={<SalesReps />} />
+              <Route path="/sales-teams" element={<SalesTeams />} />
               <Route path="/credit" element={<Credit />} />
               <Route path="/reports" element={<Reports />} />
               <Route path="/masters" element={<Masters />} />
+              <Route path="/suppliers" element={<Suppliers />} />
+              <Route path="/dealers" element={<Dealers />} />
+              <Route path="/purchase-orders" element={<PurchaseOrders />} />
               <Route path="/administration" element={<Administration />} />
               <Route path="/audit-logs" element={<AuditLogs />} />
             </Route>

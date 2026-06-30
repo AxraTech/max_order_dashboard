@@ -1,12 +1,12 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   Card, Typography, Table, Tag, Space, Button, Modal,
-  Descriptions, Timeline, Empty, Input, Select, message, Popconfirm,
+  Descriptions, Input, Select, message, Popconfirm,
   Form, InputNumber, Row, Col, Divider
 } from 'antd';
 import {
   SearchOutlined, ReloadOutlined, EyeOutlined, CloseCircleOutlined,
-  CheckCircleOutlined, PlusOutlined, SwapOutlined, ArrowRightOutlined,
+  CheckCircleOutlined, PlusOutlined, ArrowRightOutlined,
   SendOutlined, InboxOutlined
 } from '@ant-design/icons';
 import { api } from '../../services/api';
@@ -35,7 +35,8 @@ interface WarehouseInfo {
   id: string;
   code: string;
   name: string;
-  branch: { name: string };
+  branchId: string;
+  branch: { id: string; name: string };
 }
 
 interface TransferRecord {
@@ -103,15 +104,15 @@ export const Transfers: React.FC = () => {
       
       const [allWhRes, scopedWhRes, prodRes] = await Promise.all([
         api.get('/inventory/warehouses', { params: { all: true } }),
-        isBranchUser && user?.branchId 
-          ? api.get('/inventory/warehouses', { params: { branchId: user.branchId } })
+        isBranchUser && user?.branch?.id 
+          ? api.get('/inventory/warehouses', { params: { branchId: user.branch.id } })
           : null,
         api.get('/products', { params: { limit: 100 } }),
       ]);
 
       if (allWhRes.data.success) {
         setSourceWarehouses(allWhRes.data.data);
-        if (!isBranchUser || !user?.branchId) {
+        if (!isBranchUser || !user?.branch?.id) {
           setDestWarehouses(allWhRes.data.data);
         }
       }
@@ -181,6 +182,33 @@ export const Transfers: React.FC = () => {
     }
   };
 
+  const isBranchUser = ['BRANCH_MANAGER', 'INVENTORY_OFFICER'].includes(user?.role?.name || '');
+  const userBranchId = user?.branch?.id;
+
+  const showApproveButton = (record: TransferRecord) => {
+    if (record.status !== 'REQUESTED') return false;
+    if (!isBranchUser) return true; // Super admin / HQ
+    return record.sourceWarehouse?.branchId === userBranchId || record.destinationWarehouse?.branchId === userBranchId;
+  };
+
+  const showDispatchButton = (record: TransferRecord) => {
+    if (record.status !== 'APPROVED') return false;
+    if (!isBranchUser) return true; // Super admin / HQ
+    return record.sourceWarehouse?.branchId === userBranchId || record.destinationWarehouse?.branchId === userBranchId;
+  };
+
+  const showCompleteButton = (record: TransferRecord) => {
+    if (record.status !== 'IN_TRANSIT') return false;
+    if (!isBranchUser) return true; // Super admin / HQ
+    return record.sourceWarehouse?.branchId === userBranchId || record.destinationWarehouse?.branchId === userBranchId;
+  };
+
+  const showCancelButton = (record: TransferRecord) => {
+    if (!['REQUESTED', 'APPROVED'].includes(record.status)) return false;
+    if (!isBranchUser) return true;
+    return record.sourceWarehouse?.branchId === userBranchId || record.destinationWarehouse?.branchId === userBranchId;
+  };
+
   const columns = [
     {
       title: 'Transfer #',
@@ -242,42 +270,58 @@ export const Transfers: React.FC = () => {
       title: 'Actions',
       key: 'actions',
       render: (_: any, r: TransferRecord) => (
-        <Space>
-          <Button type="link" icon={<EyeOutlined />} onClick={() => handleViewDetail(r.id)}>
+        <Space size="small">
+          <Button type="link" icon={<EyeOutlined />} onClick={() => handleViewDetail(r.id)} style={{ padding: '0 4px' }}>
             View
           </Button>
+          {showApproveButton(r) && (
+            <Popconfirm
+              title="Approve this stock request?"
+              onConfirm={() => handleStatusTransition(r.id, 'APPROVED', 'Approved by warehouse manager')}
+              okText="Approve"
+            >
+              <Button type="link" icon={<CheckCircleOutlined />} style={{ padding: '0 4px', color: '#10B981' }}>
+                Approve
+              </Button>
+            </Popconfirm>
+          )}
+          {showDispatchButton(r) && (
+            <Popconfirm
+              title="Mark items as dispatched in transit?"
+              onConfirm={() => handleStatusTransition(r.id, 'IN_TRANSIT', 'Dispatched from source warehouse')}
+              okText="Dispatch"
+            >
+              <Button type="link" icon={<SendOutlined />} style={{ padding: '0 4px', color: '#F59E0B' }}>
+                Dispatch
+              </Button>
+            </Popconfirm>
+          )}
+          {showCompleteButton(r) && (
+            <Popconfirm
+              title="Confirm receipt of all stock?"
+              onConfirm={() => handleStatusTransition(r.id, 'COMPLETED', 'Received and verified')}
+              okText="Complete"
+            >
+              <Button type="link" icon={<InboxOutlined />} style={{ padding: '0 4px', color: '#10B981' }}>
+                Complete
+              </Button>
+            </Popconfirm>
+          )}
+          {showCancelButton(r) && (
+            <Popconfirm
+              title="Cancel this stock transfer?"
+              onConfirm={() => handleStatusTransition(r.id, 'CANCELLED', 'Cancelled by manager')}
+              okText="Cancel" okButtonProps={{ danger: true }}
+            >
+              <Button type="link" danger icon={<CloseCircleOutlined />} style={{ padding: '0 4px' }}>
+                Cancel
+              </Button>
+            </Popconfirm>
+          )}
         </Space>
       ),
     },
   ];
-
-  // Helper check for buttons
-  const isBranchUser = ['BRANCH_MANAGER', 'INVENTORY_OFFICER'].includes(user?.role?.name || '');
-  const userBranchId = user?.branchId;
-
-  const showApproveButton = (record: TransferRecord) => {
-    if (record.status !== 'REQUESTED') return false;
-    if (!isBranchUser) return true; // Super admin / HQ
-    return record.sourceWarehouse?.branchId === userBranchId; // Only source branch can approve
-  };
-
-  const showDispatchButton = (record: TransferRecord) => {
-    if (record.status !== 'APPROVED') return false;
-    if (!isBranchUser) return true;
-    return record.sourceWarehouse?.branchId === userBranchId; // Only source branch can dispatch
-  };
-
-  const showCompleteButton = (record: TransferRecord) => {
-    if (record.status !== 'IN_TRANSIT') return false;
-    if (!isBranchUser) return true;
-    return record.destinationWarehouse?.branchId === userBranchId; // Only destination branch can complete
-  };
-
-  const showCancelButton = (record: TransferRecord) => {
-    if (!['REQUESTED', 'APPROVED'].includes(record.status)) return false;
-    if (!isBranchUser) return true;
-    return record.sourceWarehouse?.branchId === userBranchId || record.destinationWarehouse?.branchId === userBranchId;
-  };
 
   return (
     <div className="animate-fade-in" style={{ paddingBottom: '24px' }}>

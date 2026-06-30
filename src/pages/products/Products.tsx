@@ -1,9 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { Card, Typography, Table, Tag, Input, Select, Space, Row, Col, Tooltip, Button, Modal, Form, InputNumber, Switch, message, DatePicker } from 'antd';
-import { SearchOutlined, SafetyCertificateOutlined, ExperimentOutlined, PlusOutlined } from '@ant-design/icons';
+import { Card, Typography, Table, Tag, Input, Select, Space, Row, Col, Tooltip, Button, Modal, Form, InputNumber, Switch, message, Popconfirm } from 'antd';
+import { SearchOutlined, SafetyCertificateOutlined, ExperimentOutlined, PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import { api } from '../../services/api';
 import { CURRENCY } from '../../types/index';
-import dayjs from 'dayjs';
 
 const { Title, Text } = Typography;
 
@@ -19,6 +18,7 @@ interface ProductItem {
   sku: string;
   uom: string;
   basePrice: number;
+  sellingPrice: number;
   genericName: string | null;
   brandName: string | null;
   dosageForm: string | null;
@@ -26,7 +26,6 @@ interface ProductItem {
   isControlled: boolean;
   storageConditions: string | null;
   category: CategoryInfo;
-  expiryDate?: string | null;
   expiryAlertThreshold: number;
 }
 
@@ -37,6 +36,7 @@ export const Products: React.FC = () => {
   
   // Modal & Form State
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<ProductItem | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [form] = Form.useForm();
 
@@ -93,25 +93,58 @@ export const Products: React.FC = () => {
   const handleCreateProduct = async (values: any) => {
     try {
       setSubmitting(true);
-      const { expiryDate, ...restValues } = values;
+      const postData = { ...values };
 
-      const postData = {
-        ...restValues,
-        expiryDate: expiryDate ? dayjs(expiryDate).toISOString() : null
-      };
-
-      const res = await api.post('/products', postData);
-      if (res.data.success) {
+      let res;
+      if (editingProduct) {
+        res = await api.put(`/products/${editingProduct.id}`, postData);
+        message.success('Product updated successfully');
+      } else {
+        res = await api.post('/products', postData);
         message.success('Product created successfully');
+      }
+
+      if (res.data.success) {
         setIsModalOpen(false);
+        setEditingProduct(null);
         form.resetFields();
         fetchProducts();
       }
     } catch (error: any) {
-      console.error('Failed to create product:', error);
-      message.error(error.response?.data?.message || 'Failed to create product');
+      console.error('Failed to save product:', error);
+      message.error(error.response?.data?.message || 'Failed to save product');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleEdit = (record: ProductItem) => {
+    setEditingProduct(record);
+    form.setFieldsValue({
+      name: record.name,
+      sku: record.sku,
+      brandName: record.brandName,
+      genericName: record.genericName,
+      categoryId: record.category.id,
+      dosageForm: record.dosageForm,
+      basePrice: record.basePrice,
+      sellingPrice: record.sellingPrice,
+      uom: record.uom,
+      storageConditions: record.storageConditions,
+      isScheduled: record.isScheduled,
+      isControlled: record.isControlled,
+      expiryAlertThreshold: record.expiryAlertThreshold,
+    });
+    setIsModalOpen(true);
+  };
+
+  const handleDelete = async (id: string) => {
+    try {
+      await api.delete(`/products/${id}`);
+      message.success('Product deleted');
+      fetchProducts();
+    } catch (error: any) {
+      message.error(error.response?.data?.message || 'Failed to delete');
     }
   };
 
@@ -170,46 +203,20 @@ export const Products: React.FC = () => {
       ),
     },
     {
+      title: 'Selling Price',
+      dataIndex: 'sellingPrice',
+      key: 'sellingPrice',
+      render: (price: number) => (
+        <strong style={{ color: '#10B981' }}>
+          {price ? price.toLocaleString() : '0'} {CURRENCY.symbol}
+        </strong>
+      ),
+    },
+    {
       title: 'Unit (UOM)',
       dataIndex: 'uom',
       key: 'uom',
       render: (uom: string) => <Tag style={{ borderRadius: '8px' }}>{uom}</Tag>,
-    },
-    {
-      title: 'Expiry Status',
-      key: 'expiry',
-      render: (_: any, record: ProductItem) => {
-        if (!record.expiryDate) {
-          return <Tag style={{ border: 'none', borderRadius: '8px' }}>No Expiry</Tag>;
-        }
-        const expiry = dayjs(record.expiryDate);
-        const today = dayjs();
-        const diffDays = expiry.diff(today, 'day');
-        const threshold = record.expiryAlertThreshold || 30;
-        
-        if (diffDays < 0) {
-          return (
-            <Space orientation="vertical" size={2}>
-              <Tag color="red" style={{ border: 'none', borderRadius: '8px', margin: 0 }}>Expired</Tag>
-              <Text type="danger" style={{ fontSize: '11px' }}>{expiry.format('YYYY-MM-DD')}</Text>
-            </Space>
-          );
-        } else if (diffDays <= threshold) {
-          return (
-            <Space orientation="vertical" size={2}>
-              <Tag color="orange" style={{ border: 'none', borderRadius: '8px', margin: 0 }}>Expiring ({diffDays}d)</Tag>
-              <Text style={{ fontSize: '11px', color: '#d46b08' }}>{expiry.format('YYYY-MM-DD')}</Text>
-            </Space>
-          );
-        } else {
-          return (
-            <Space orientation="vertical" size={2}>
-              <Tag color="green" style={{ border: 'none', borderRadius: '8px', margin: 0 }}>Healthy</Tag>
-              <Text style={{ fontSize: '11px', color: '#389e0d' }}>{expiry.format('YYYY-MM-DD')}</Text>
-            </Space>
-          );
-        }
-      }
     },
     {
       title: 'Storage & Control',
@@ -238,6 +245,28 @@ export const Products: React.FC = () => {
         </Space>
       ),
     },
+    {
+      title: 'Actions',
+      key: 'actions',
+      width: 130,
+      render: (_: any, record: ProductItem) => (
+        <Space size="small">
+          <Tooltip title="Edit Product">
+            <Button
+              type="text"
+              size="small"
+              icon={<EditOutlined />}
+              onClick={() => handleEdit(record)}
+            />
+          </Tooltip>
+          <Popconfirm title="Delete this product?" onConfirm={() => handleDelete(record.id)} okText="Yes" okButtonProps={{ danger: true }}>
+            <Tooltip title="Delete">
+              <Button type="text" size="small" danger icon={<DeleteOutlined />} />
+            </Tooltip>
+          </Popconfirm>
+        </Space>
+      ),
+    },
   ];
 
   return (
@@ -247,7 +276,7 @@ export const Products: React.FC = () => {
         <Button 
           type="primary" 
           icon={<PlusOutlined />} 
-          onClick={() => setIsModalOpen(true)}
+          onClick={() => { setEditingProduct(null); form.resetFields(); setIsModalOpen(true); }}
           style={{ borderRadius: '12px' }}
         >
           Add Product
@@ -312,10 +341,11 @@ export const Products: React.FC = () => {
 
       {/* Add Product Modal */}
       <Modal
-        title={<span style={{ fontWeight: 700, fontSize: '18px' }}>Create New Medicine Product</span>}
+        title={<span style={{ fontWeight: 700, fontSize: '18px' }}>{editingProduct ? 'Edit Medicine Product' : 'Create New Medicine Product'}</span>}
         open={isModalOpen}
         onCancel={() => {
           setIsModalOpen(false);
+          setEditingProduct(null);
           form.resetFields();
         }}
         footer={null}
@@ -330,7 +360,9 @@ export const Products: React.FC = () => {
             isScheduled: false,
             isControlled: false,
             uom: 'Box',
-            expiryAlertThreshold: 30
+            expiryAlertThreshold: 30,
+            basePrice: 0,
+            sellingPrice: 0
           }}
           style={{ marginTop: '20px' }}
         >
@@ -394,16 +426,25 @@ export const Products: React.FC = () => {
           </Row>
 
           <Row gutter={16}>
-            <Col span={12}>
+            <Col span={8}>
               <Form.Item
                 name="basePrice"
-                label="Base Unit Price (MMK)"
+                label="Base Price (MMK)"
                 rules={[{ required: true, message: 'Please input base price!' }]}
               >
-                <InputNumber min={0} style={{ width: '100%', borderRadius: '8px' }} placeholder="Base price in MMK" />
+                <InputNumber min={0} style={{ width: '100%', borderRadius: '8px' }} placeholder="Base price" />
               </Form.Item>
             </Col>
-            <Col span={12}>
+            <Col span={8}>
+              <Form.Item
+                name="sellingPrice"
+                label="Selling Price (MMK)"
+                rules={[{ required: true, message: 'Please input selling price!' }]}
+              >
+                <InputNumber min={0} style={{ width: '100%', borderRadius: '8px' }} placeholder="Selling price" />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
               <Form.Item
                 name="uom"
                 label="Unit of Measure (UOM)"
@@ -433,28 +474,10 @@ export const Products: React.FC = () => {
           </Row>
 
           <Row gutter={16}>
-            <Col span={12}>
-              <Form.Item
-                name="expiryDate"
-                label="Expiry Date"
-              >
-                <DatePicker style={{ width: '100%', borderRadius: '8px' }} placeholder="Select product expiry date (optional)" />
-              </Form.Item>
-              <div style={{ marginTop: '-12px', marginBottom: '16px' }}>
-                <Space size={8} wrap>
-                  <Text type="secondary" style={{ fontSize: '12px' }}>Quick Presets:</Text>
-                  <Button size="small" type="dashed" onClick={() => form.setFieldsValue({ expiryDate: dayjs().add(1, 'month') })}>+1 Month</Button>
-                  <Button size="small" type="dashed" onClick={() => form.setFieldsValue({ expiryDate: dayjs().add(2, 'month') })}>+2 Months</Button>
-                  <Button size="small" type="dashed" onClick={() => form.setFieldsValue({ expiryDate: dayjs().add(3, 'month') })}>+3 Months</Button>
-                  <Button size="small" type="dashed" onClick={() => form.setFieldsValue({ expiryDate: dayjs().add(6, 'month') })}>+6 Months</Button>
-                  <Button size="small" danger type="text" onClick={() => form.setFieldsValue({ expiryDate: null })}>Clear</Button>
-                </Space>
-              </div>
-            </Col>
-            <Col span={12}>
+            <Col span={24}>
               <Form.Item
                 name="expiryAlertThreshold"
-                label="Expiry Alert Threshold"
+                label="Expiry Alert Threshold (Default for Batches)"
                 rules={[{ required: true, message: 'Please select expiry alert threshold!' }]}
               >
                 <Select placeholder="Select alert threshold" style={{ borderRadius: '8px' }}>
@@ -473,8 +496,8 @@ export const Products: React.FC = () => {
 
           <Form.Item style={{ textAlign: 'right', marginBottom: 0 }}>
             <Space>
-              <Button onClick={() => setIsModalOpen(false)}>Cancel</Button>
-              <Button type="primary" htmlType="submit" loading={submitting}>Submit</Button>
+              <Button onClick={() => { setIsModalOpen(false); setEditingProduct(null); form.resetFields(); }}>Cancel</Button>
+              <Button type="primary" htmlType="submit" loading={submitting}>{editingProduct ? 'Update' : 'Create'}</Button>
             </Space>
           </Form.Item>
         </Form>

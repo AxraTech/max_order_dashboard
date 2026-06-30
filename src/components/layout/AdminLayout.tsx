@@ -6,6 +6,7 @@ import {
   UserOutlined,
   TeamOutlined,
   ContainerOutlined,
+  RollbackOutlined,
   InboxOutlined,
   SwapOutlined,
   FileTextOutlined,
@@ -21,6 +22,10 @@ import {
   ShopOutlined,
   EnvironmentOutlined,
   CarOutlined,
+  AuditOutlined,
+  ContactsOutlined,
+  ShoppingOutlined,
+  GiftOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '../../store/auth.store';
 import { useAdminBranchStore } from '../../store/branch.store';
@@ -78,10 +83,13 @@ export const AdminLayout: React.FC = () => {
   const menuItems = [
     { key: '/dashboard', icon: <DashboardOutlined />, label: 'Dashboard' },
     { key: '/orders', icon: <ContainerOutlined />, label: 'Orders' },
+    { key: '/sales-returns', icon: <RollbackOutlined />, label: 'Sales Returns' },
     { key: '/inventory', icon: <InboxOutlined />, label: 'Inventory' },
     { key: '/inventory/transfers', icon: <SwapOutlined />, label: 'Stock Transfers' },
+    { key: '/purchase-orders', icon: <ShoppingOutlined />, label: 'Purchase Orders' },
     { key: '/delivery', icon: <CarOutlined />, label: 'Delivery' },
     { key: '/products', icon: <ShopOutlined />, label: 'Products' },
+    { key: '/promotions', icon: <GiftOutlined />, label: 'Promotions' },
     {
       key: '/branches',
       icon: <EnvironmentOutlined />,
@@ -110,7 +118,10 @@ export const AdminLayout: React.FC = () => {
     },
     { key: '/invoices', icon: <FileTextOutlined />, label: 'Invoicing' },
     { key: '/customers', icon: <TeamOutlined />, label: 'Customers' },
+    { key: '/suppliers', icon: <ContactsOutlined />, label: 'Suppliers' },
+    { key: '/dealers', icon: <AuditOutlined />, label: 'Dealers' },
     { key: '/sales-reps', icon: <IdcardOutlined />, label: 'Sales Representatives' },
+    { key: '/sales-teams', icon: <TeamOutlined />, label: 'Sales Teams' },
     { key: '/credit', icon: <CreditCardOutlined />, label: 'Credit Management' },
     { key: '/reports', icon: <BarChartOutlined />, label: 'Reports & Analytics' },
     { key: '/masters', icon: <DatabaseOutlined />, label: 'Masters' },

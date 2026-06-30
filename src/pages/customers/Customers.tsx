@@ -5,7 +5,7 @@ import {
 } from 'antd';
 import {
   SearchOutlined, PlusOutlined, EyeOutlined, EditOutlined,
-  DeleteOutlined, PhoneOutlined, MailOutlined,
+  DeleteOutlined, PhoneOutlined, MailOutlined, CheckCircleOutlined,
 } from '@ant-design/icons';
 import { api } from '../../services/api';
 import { CURRENCY, CustomerCategory } from '../../types/index';
@@ -33,6 +33,17 @@ interface CreditLimitInfo {
   status: string;
 }
 
+interface CustomerSalesRepRecord {
+  salesRep: {
+    code: string;
+    user: {
+      firstName: string;
+      lastName: string;
+    };
+  };
+  isPrimary: boolean;
+}
+
 interface CustomerRecord {
   id: string;
   code: string;
@@ -48,6 +59,7 @@ interface CustomerRecord {
   territory: TerritoryInfo | null;
   branch: BranchInfo | null;
   creditLimit: CreditLimitInfo | null;
+  customerSalesReps?: CustomerSalesRepRecord[];
   _count: { orders: number };
 }
 
@@ -196,6 +208,17 @@ export const Customers: React.FC = () => {
     }
   };
 
+  // ---- Approve / Activate Customer ----
+  const handleApproveCustomer = async (id: string) => {
+    try {
+      await api.put(`/customers/${id}`, { isActive: true });
+      message.success('Customer approved and activated successfully');
+      fetchCustomers();
+    } catch (err: any) {
+      message.error(err.response?.data?.message || 'Failed to approve customer');
+    }
+  };
+
   // ---- View Detail ----
   const handleViewDetail = async (id: string) => {
     try {
@@ -311,12 +334,27 @@ export const Customers: React.FC = () => {
       },
     },
     {
+      title: 'Submitted By / SR',
+      key: 'salesRep',
+      width: 155,
+      render: (_: any, record: CustomerRecord) => {
+        const primarySR = record.customerSalesReps?.find(csr => csr.isPrimary)?.salesRep || record.customerSalesReps?.[0]?.salesRep;
+        if (!primarySR) return <Text type="secondary">—</Text>;
+        return (
+          <Space orientation="vertical" size={0}>
+            <Text style={{ fontSize: '13px' }}>{primarySR.user.firstName} {primarySR.user.lastName}</Text>
+            <Text type="secondary" style={{ fontSize: '11px' }}>{primarySR.code}</Text>
+          </Space>
+        );
+      }
+    },
+    {
       title: 'Status',
       key: 'status',
-      width: 80,
+      width: 125,
       render: (_: any, record: CustomerRecord) => (
-        <Tag color={record.isActive ? 'green' : 'red'} style={{ borderRadius: '8px', border: 'none' }}>
-          {record.isActive ? 'Active' : 'Inactive'}
+        <Tag color={record.isActive ? 'green' : 'orange'} style={{ borderRadius: '8px', border: 'none', fontWeight: 600 }}>
+          {record.isActive ? 'Active' : 'Pending Activation'}
         </Tag>
       ),
     },
@@ -334,6 +372,21 @@ export const Customers: React.FC = () => {
               onClick={() => handleViewDetail(record.id)}
             />
           </Tooltip>
+          {!record.isActive && (
+            <Popconfirm
+              title="Approve and activate this customer?"
+              onConfirm={() => handleApproveCustomer(record.id)}
+              okText="Approve"
+            >
+              <Tooltip title="Approve Customer">
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<CheckCircleOutlined style={{ color: '#10B981' }} />}
+                />
+              </Tooltip>
+            </Popconfirm>
+          )}
           <Tooltip title="Edit">
             <Button
               type="text"
@@ -632,7 +685,14 @@ export const Customers: React.FC = () => {
               <Descriptions.Item label="Payment Terms">{detailCustomer.paymentTermDays} days</Descriptions.Item>
               <Descriptions.Item label="Address" span={2}>{detailCustomer.address || '—'}</Descriptions.Item>
               <Descriptions.Item label="Status">
-                <Badge status={detailCustomer.isActive ? 'success' : 'error'} text={detailCustomer.isActive ? 'Active' : 'Inactive'} />
+                <Badge status={detailCustomer.isActive ? 'success' : 'warning'} text={detailCustomer.isActive ? 'Active' : 'Pending Activation'} />
+              </Descriptions.Item>
+              <Descriptions.Item label="Submitted By / SR">
+                {(() => {
+                  const primarySR = detailCustomer.customerSalesReps?.find(csr => csr.isPrimary)?.salesRep || detailCustomer.customerSalesReps?.[0]?.salesRep;
+                  if (!primarySR) return '—';
+                  return `${primarySR.user?.firstName} ${primarySR.user?.lastName} (${primarySR.code})`;
+                })()}
               </Descriptions.Item>
               <Descriptions.Item label="Territory">
                 {detailCustomer.territory
