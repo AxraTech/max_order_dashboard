@@ -27,11 +27,27 @@ export const Branches: React.FC = () => {
   const [search, setSearch] = useState('');
   const { setBranchCount } = useAdminBranchStore();
   
-  // Modal & Form states
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingBranch, setEditingBranch] = useState<BranchItem | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [form] = Form.useForm();
+  const [wiping, setWiping] = useState(false);
+
+  const handleWipeBranches = async () => {
+    try {
+      setWiping(true);
+      const res = await api.delete('/branches/clear');
+      if (res.data.success) {
+        message.success('All branch records and related system data successfully wiped!');
+        fetchBranches();
+      }
+    } catch (err: any) {
+      console.error('Wipe failed:', err);
+      message.error(err.response?.data?.message || 'Failed to wipe branches data');
+    } finally {
+      setWiping(false);
+    }
+  };
 
   useEffect(() => {
     fetchBranches();
@@ -223,14 +239,32 @@ export const Branches: React.FC = () => {
     <div className="animate-fade-in" style={{ paddingBottom: '24px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
         <Title level={2} style={{ margin: 0, fontWeight: 700 }}>Branch Management</Title>
-        <Button 
-          type="primary" 
-          icon={<PlusOutlined />} 
-          onClick={handleOpenAddModal}
-          style={{ borderRadius: '12px' }}
-        >
-          Create Branch
-        </Button>
+        <Space>
+          <Popconfirm
+            title="Wipe All Branches?"
+            description="Warning: Wiping branches resets all branch setups, staff profiles, warehouse records, stock levels, orders, and invoices. Super Admin accounts remain active. This cannot be undone."
+            onConfirm={handleWipeBranches}
+            okText="Yes, Wipe"
+            cancelText="Cancel"
+            okButtonProps={{ danger: true, loading: wiping }}
+          >
+            <Button
+              danger
+              icon={<DeleteOutlined />}
+              style={{ borderRadius: '12px' }}
+            >
+              Wipe Branches
+            </Button>
+          </Popconfirm>
+          <Button 
+            type="primary" 
+            icon={<PlusOutlined />} 
+            onClick={handleOpenAddModal}
+            style={{ borderRadius: '12px' }}
+          >
+            Create Branch
+          </Button>
+        </Space>
       </div>
 
       {/* Search Filter */}

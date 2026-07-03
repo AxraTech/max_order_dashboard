@@ -3,6 +3,7 @@ import { Card, Typography, Table, Tag, Input, Select, Space, Row, Col, Tooltip, 
 import { SearchOutlined, SafetyCertificateOutlined, ExperimentOutlined, PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import { api } from '../../services/api';
 import { CURRENCY } from '../../types/index';
+import { useAuthStore } from '../../store/auth.store';
 
 const { Title, Text } = Typography;
 
@@ -19,6 +20,7 @@ interface ProductItem {
   uom: string;
   basePrice: number;
   sellingPrice: number;
+  dealerPrice: number;
   genericName: string | null;
   brandName: string | null;
   dosageForm: string | null;
@@ -30,6 +32,8 @@ interface ProductItem {
 }
 
 export const Products: React.FC = () => {
+  const { user } = useAuthStore();
+  const isSuperAdmin = user?.role?.name === 'SUPER_ADMIN';
   const [loading, setLoading] = useState(true);
   const [products, setProducts] = useState<ProductItem[]>([]);
   const [categories, setCategories] = useState<CategoryInfo[]>([]);
@@ -39,6 +43,23 @@ export const Products: React.FC = () => {
   const [editingProduct, setEditingProduct] = useState<ProductItem | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [form] = Form.useForm();
+  const [wiping, setWiping] = useState(false);
+
+  const handleWipeProducts = async () => {
+    try {
+      setWiping(true);
+      const res = await api.delete('/products/clear');
+      if (res.data.success) {
+        message.success('All product records and transaction history successfully wiped!');
+        fetchProducts();
+      }
+    } catch (err: any) {
+      console.error('Wipe failed:', err);
+      message.error(err.response?.data?.message || 'Failed to wipe products data');
+    } finally {
+      setWiping(false);
+    }
+  };
 
   // Filters
   const [search, setSearch] = useState('');
@@ -129,6 +150,7 @@ export const Products: React.FC = () => {
       dosageForm: record.dosageForm,
       basePrice: record.basePrice,
       sellingPrice: record.sellingPrice,
+      dealerPrice: record.dealerPrice,
       uom: record.uom,
       storageConditions: record.storageConditions,
       isScheduled: record.isScheduled,
@@ -192,7 +214,7 @@ export const Products: React.FC = () => {
         </Space>
       ),
     },
-    {
+    ...(isSuperAdmin ? [{
       title: 'Base Price',
       dataIndex: 'basePrice',
       key: 'basePrice',
@@ -201,13 +223,23 @@ export const Products: React.FC = () => {
           {price.toLocaleString()} {CURRENCY.symbol}
         </strong>
       ),
-    },
+    }] : []),
     {
       title: 'Selling Price',
       dataIndex: 'sellingPrice',
       key: 'sellingPrice',
       render: (price: number) => (
         <strong style={{ color: '#10B981' }}>
+          {price ? price.toLocaleString() : '0'} {CURRENCY.symbol}
+        </strong>
+      ),
+    },
+    {
+      title: 'Dealer Price',
+      dataIndex: 'dealerPrice',
+      key: 'dealerPrice',
+      render: (price: number) => (
+        <strong style={{ color: '#D97706' }}>
           {price ? price.toLocaleString() : '0'} {CURRENCY.symbol}
         </strong>
       ),
@@ -273,14 +305,32 @@ export const Products: React.FC = () => {
     <div className="animate-fade-in" style={{ paddingBottom: '24px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
         <Title level={2} style={{ margin: 0, fontWeight: 700 }}>Product Catalog</Title>
-        <Button 
-          type="primary" 
-          icon={<PlusOutlined />} 
-          onClick={() => { setEditingProduct(null); form.resetFields(); setIsModalOpen(true); }}
-          style={{ borderRadius: '12px' }}
-        >
-          Add Product
-        </Button>
+        <Space>
+          <Popconfirm
+            title="Wipe All Products?"
+            description="Warning: This will delete all products, category-relations, stock balances, batches, orders, and invoices. This cannot be undone."
+            onConfirm={handleWipeProducts}
+            okText="Yes, Wipe"
+            cancelText="Cancel"
+            okButtonProps={{ danger: true, loading: wiping }}
+          >
+            <Button
+              danger
+              icon={<DeleteOutlined />}
+              style={{ borderRadius: '12px' }}
+            >
+              Wipe Products
+            </Button>
+          </Popconfirm>
+          <Button 
+            type="primary" 
+            icon={<PlusOutlined />} 
+            onClick={() => { setEditingProduct(null); form.resetFields(); setIsModalOpen(true); }}
+            style={{ borderRadius: '12px' }}
+          >
+            Add Product
+          </Button>
+        </Space>
       </div>
 
       {/* Filters */}
@@ -362,7 +412,8 @@ export const Products: React.FC = () => {
             uom: 'Box',
             expiryAlertThreshold: 30,
             basePrice: 0,
-            sellingPrice: 0
+            sellingPrice: 0,
+            dealerPrice: 0
           }}
           style={{ marginTop: '20px' }}
         >
@@ -426,16 +477,18 @@ export const Products: React.FC = () => {
           </Row>
 
           <Row gutter={16}>
-            <Col span={8}>
-              <Form.Item
-                name="basePrice"
-                label="Base Price (MMK)"
-                rules={[{ required: true, message: 'Please input base price!' }]}
-              >
-                <InputNumber min={0} style={{ width: '100%', borderRadius: '8px' }} placeholder="Base price" />
-              </Form.Item>
-            </Col>
-            <Col span={8}>
+            {isSuperAdmin && (
+              <Col span={12}>
+                <Form.Item
+                  name="basePrice"
+                  label="Base Price (MMK)"
+                  rules={[{ required: true, message: 'Please input base price!' }]}
+                >
+                  <InputNumber min={0} style={{ width: '100%', borderRadius: '8px' }} placeholder="Base price" />
+                </Form.Item>
+              </Col>
+            )}
+            <Col span={isSuperAdmin ? 12 : 24}>
               <Form.Item
                 name="sellingPrice"
                 label="Selling Price (MMK)"
@@ -444,7 +497,19 @@ export const Products: React.FC = () => {
                 <InputNumber min={0} style={{ width: '100%', borderRadius: '8px' }} placeholder="Selling price" />
               </Form.Item>
             </Col>
-            <Col span={8}>
+          </Row>
+
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                name="dealerPrice"
+                label="Dealer Price (MMK)"
+                rules={[{ required: true, message: 'Please input dealer price!' }]}
+              >
+                <InputNumber min={0} style={{ width: '100%', borderRadius: '8px' }} placeholder="Dealer price" />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
               <Form.Item
                 name="uom"
                 label="Unit of Measure (UOM)"

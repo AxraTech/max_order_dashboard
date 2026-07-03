@@ -241,7 +241,18 @@ export const Roles: React.FC = () => {
             key: moduleName,
             label: <Text strong>{moduleName}</Text>,
             children: (
-              <Checkbox.Group value={selectedPermissionIds} onChange={(values) => setSelectedPermissionIds(values as string[])}>
+              <Checkbox.Group
+                value={selectedPermissionIds}
+                onChange={(values) => {
+                  // Get IDs that belong to this module
+                  const modulePermissionIds = perms.map((p) => p.id);
+                  // Keep selections from OTHER modules, then add new selections from this module
+                  const otherModuleSelections = selectedPermissionIds.filter(
+                    (id) => !modulePermissionIds.includes(id)
+                  );
+                  setSelectedPermissionIds([...otherModuleSelections, ...(values as string[])]);
+                }}
+              >
                 <Space wrap>
                   {perms.map((permission) => (
                     <Checkbox key={permission.id} value={permission.id}>{permission.action}</Checkbox>

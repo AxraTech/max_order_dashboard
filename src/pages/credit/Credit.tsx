@@ -31,11 +31,28 @@ export const Credit: React.FC = () => {
   const [pageSize, setPageSize] = useState(10);
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('');
+  const [branches, setBranches] = useState<any[]>([]);
+  const [branchFilter, setBranchFilter] = useState<string>('all');
+
+  // Load branches list
+  useEffect(() => {
+    api.get('/branches').then(res => {
+      if (res.data.success) setBranches(res.data.data);
+    }).catch(() => {});
+  }, []);
 
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await api.get('/credit', { params: { page, limit: pageSize, search: search || undefined, status: status || undefined } });
+      const res = await api.get('/credit', {
+        params: {
+          page,
+          limit: pageSize,
+          search: search || undefined,
+          status: status || undefined,
+          branchId: branchFilter !== 'all' ? branchFilter : undefined,
+        }
+      });
       if (res.data.success) {
         setItems(res.data.data);
         setTotal(res.data.meta?.total || 0);
@@ -45,7 +62,7 @@ export const Credit: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, search, status]);
+  }, [page, pageSize, search, status, branchFilter]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -71,6 +88,10 @@ export const Credit: React.FC = () => {
       <Card className="glass-card" variant="borderless" style={{ marginBottom: 20 }}>
         <Space wrap>
           <Input prefix={<SearchOutlined />} placeholder="Search customer..." value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} allowClear style={{ width: 280 }} />
+          <Select value={branchFilter} style={{ width: 200 }} onChange={(v) => { setBranchFilter(v); setPage(1); }}>
+            <Select.Option value="all">All Branches</Select.Option>
+            {branches.map((b) => <Select.Option key={b.id} value={b.id}>{b.name}</Select.Option>)}
+          </Select>
           <Select value={status || 'all'} style={{ width: 200 }} onChange={(v) => { setStatus(v === 'all' ? '' : v); setPage(1); }}>
             <Select.Option value="all">All Statuses</Select.Option>
             {Object.keys(STATUS_COLOR).map((s) => <Select.Option key={s} value={s}>{s.replace(/_/g, ' ')}</Select.Option>)}

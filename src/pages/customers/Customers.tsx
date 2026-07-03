@@ -54,6 +54,7 @@ interface CustomerRecord {
   address: string | null;
   city: string | null;
   category: CustomerCategory;
+  channel: string | null;
   paymentTermDays: number;
   isActive: boolean;
   territory: TerritoryInfo | null;
@@ -63,12 +64,7 @@ interface CustomerRecord {
   _count: { orders: number };
 }
 
-const CATEGORY_COLORS: Record<string, string> = {
-  REGULAR: 'default',
-  VIP: 'gold',
-  WHOLESALE: 'purple',
-  DEALER: 'geekblue',
-};
+
 
 const CREDIT_STATUS_COLORS: Record<string, 'success' | 'warning' | 'error' | 'processing'> = {
   GOOD_STANDING: 'success',
@@ -84,9 +80,15 @@ export const Customers: React.FC = () => {
   const [territories, setTerritories] = useState<TerritoryInfo[]>([]);
   const [branches, setBranches] = useState<BranchInfo[]>([]);
 
+  // Creatable channel options
+  const DEFAULT_CHANNELS = ['Medical', 'Retail', 'Wholesale'];
+  const [channelOptions, setChannelOptions] = useState<string[]>(DEFAULT_CHANNELS);
+  const [channelSearch, setChannelSearch] = useState('');;
+
   // Filters
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  const [branchFilter, setBranchFilter] = useState<string>('all');
   const [territoryFilter, setTerritoryFilter] = useState<string>('all');
   const [activeFilter, setActiveFilter] = useState<string>('all');
 
@@ -125,6 +127,7 @@ export const Customers: React.FC = () => {
           limit: pageSize,
           search: search || undefined,
           category: categoryFilter !== 'all' ? categoryFilter : undefined,
+          branchId: branchFilter !== 'all' ? branchFilter : undefined,
           territoryId: territoryFilter !== 'all' ? territoryFilter : undefined,
           isActive: activeFilter !== 'all' ? String(activeFilter === 'active') : undefined,
         },
@@ -138,7 +141,7 @@ export const Customers: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [currentPage, pageSize, search, categoryFilter, territoryFilter, activeFilter]);
+  }, [currentPage, pageSize, search, categoryFilter, branchFilter, territoryFilter, activeFilter]);
 
   useEffect(() => { fetchCustomers(); }, [fetchCustomers]);
 
@@ -168,6 +171,7 @@ export const Customers: React.FC = () => {
       address: record.address,
       city: record.city,
       category: record.category,
+      channel: record.channel,
       paymentTermDays: record.paymentTermDays,
       territoryId: record.territory?.id || null,
       branchId: record.branch?.id || null,
@@ -275,15 +279,13 @@ export const Customers: React.FC = () => {
       ),
     },
     {
-      title: 'Category',
-      dataIndex: 'category',
-      key: 'category',
+      title: 'Channel',
+      dataIndex: 'channel',
+      key: 'channel',
       width: 110,
-      render: (cat: CustomerCategory) => (
-        <Tag color={CATEGORY_COLORS[cat]} style={{ borderRadius: '8px', border: 'none', fontWeight: 600 }}>
-          {cat.replace('_', ' ')}
-        </Tag>
-      ),
+      render: (ch: string | null) => ch ? (
+        <Tag color="geekblue" style={{ borderRadius: '8px', border: 'none', fontWeight: 600 }}>{ch}</Tag>
+      ) : <Text type="secondary">—</Text>,
     },
     {
       title: 'Territory',
@@ -432,7 +434,7 @@ export const Customers: React.FC = () => {
       {/* Filters */}
       <Card className="glass-card" variant="borderless" style={{ marginBottom: '20px' }}>
         <Row gutter={[16, 16]} align="middle">
-          <Col xs={24} sm={12} md={8}>
+          <Col xs={24} sm={12} md={6}>
             <Input
               placeholder="Search by name, code, contact or phone..."
               prefix={<SearchOutlined style={{ color: 'var(--text-secondary)' }} />}
@@ -458,6 +460,18 @@ export const Customers: React.FC = () => {
           <Col xs={12} sm={6} md={4}>
             <Select
               style={{ width: '100%', borderRadius: '12px' }}
+              value={branchFilter}
+              onChange={(val) => { setBranchFilter(val); setCurrentPage(1); }}
+            >
+              <Select.Option value="all">All Branches</Select.Option>
+              {branches.map((b) => (
+                <Select.Option key={b.id} value={b.id}>{b.name}</Select.Option>
+              ))}
+            </Select>
+          </Col>
+          <Col xs={12} sm={6} md={5}>
+            <Select
+              style={{ width: '100%', borderRadius: '12px' }}
               value={territoryFilter}
               onChange={(val) => { setTerritoryFilter(val); setCurrentPage(1); }}
             >
@@ -467,7 +481,7 @@ export const Customers: React.FC = () => {
               ))}
             </Select>
           </Col>
-          <Col xs={12} sm={6} md={4}>
+          <Col xs={12} sm={6} md={5}>
             <Select
               style={{ width: '100%', borderRadius: '12px' }}
               value={activeFilter}
@@ -544,9 +558,8 @@ export const Customers: React.FC = () => {
             <Col span={12}>
               <Form.Item
                 name="email"
-                label="Email (for login)"
+                label="Email (optional)"
                 rules={[
-                  { required: true, message: 'Email is required for customer login!' },
                   { type: 'email', message: 'Please enter a valid email!' },
                 ]}
               >
@@ -560,11 +573,11 @@ export const Customers: React.FC = () => {
               <Col span={12}>
                 <Form.Item
                   name="password"
-                  label="Password"
+                  label="Password (optional)"
                   rules={[
-                    { required: true, message: 'Password is required!' },
                     { min: 6, message: 'Password must be at least 6 characters' },
                   ]}
+                  extra="Leave blank if customer portal login is not needed"
                 >
                   <Input.Password placeholder="Customer login password" style={{ borderRadius: '8px' }} />
                 </Form.Item>
@@ -594,6 +607,36 @@ export const Customers: React.FC = () => {
                   <Select.Option value="WHOLESALE">Wholesale</Select.Option>
                   <Select.Option value="DEALER">Dealer</Select.Option>
                 </Select>
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item name="channel" label="Channel">
+                <Select
+                  showSearch
+                  allowClear
+                  placeholder="Medical, Retail..."
+                  style={{ borderRadius: '8px' }}
+                  onSearch={(val) => setChannelSearch(val)}
+                  dropdownRender={(menu) => (
+                    <>
+                      {menu}
+                      {channelSearch && !channelOptions.includes(channelSearch) && (
+                        <div
+                          style={{ padding: '8px 12px', cursor: 'pointer', color: 'var(--primary-color)', borderTop: '1px solid #f0f0f0' }}
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => {
+                            setChannelOptions((prev) => [...prev, channelSearch]);
+                            form.setFieldValue('channel', channelSearch);
+                            setChannelSearch('');
+                          }}
+                        >
+                          + Create "{channelSearch}"
+                        </div>
+                      )}
+                    </>
+                  )}
+                  options={channelOptions.map((o) => ({ label: o, value: o }))}
+                />
               </Form.Item>
             </Col>
             <Col span={8}>
@@ -672,10 +715,10 @@ export const Customers: React.FC = () => {
               <Descriptions.Item label="Code">
                 <Text code strong>{detailCustomer.code}</Text>
               </Descriptions.Item>
-              <Descriptions.Item label="Category">
-                <Tag color={CATEGORY_COLORS[detailCustomer.category]} style={{ borderRadius: '8px', border: 'none' }}>
-                  {detailCustomer.category}
-                </Tag>
+              <Descriptions.Item label="Channel">
+                {detailCustomer.channel
+                  ? <Tag color="geekblue" style={{ borderRadius: '8px', border: 'none' }}>{detailCustomer.channel}</Tag>
+                  : '—'}
               </Descriptions.Item>
               <Descriptions.Item label="Name">{detailCustomer.name}</Descriptions.Item>
               <Descriptions.Item label="Contact Person">{detailCustomer.contactPerson || '—'}</Descriptions.Item>

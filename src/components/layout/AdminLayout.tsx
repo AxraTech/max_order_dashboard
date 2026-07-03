@@ -129,6 +129,52 @@ export const AdminLayout: React.FC = () => {
     { key: '/audit-logs', icon: <FileSearchOutlined />, label: 'Audit Logs' },
   ];
 
+  // Filter sidebar tabs dynamically based on user role permissions
+  const filteredMenuItems = menuItems.filter(item => {
+    if (!user) return false;
+    const role = user.role.name;
+    
+    // Super Admin and HQ Manager have full visibility
+    if (['SUPER_ADMIN', 'HQ_MANAGER'].includes(role)) return true;
+    
+    switch (item.key) {
+      case '/dashboard':
+        return true;
+      case '/orders':
+      case '/sales-returns':
+        return ['BRANCH_MANAGER', 'FINANCE_OFFICER', 'VIEWER_AUDITOR'].includes(role);
+      case '/inventory':
+      case '/inventory/transfers':
+        return ['BRANCH_MANAGER', 'INVENTORY_OFFICER', 'VIEWER_AUDITOR'].includes(role);
+      case '/purchase-orders':
+      case '/delivery':
+        return ['BRANCH_MANAGER', 'INVENTORY_OFFICER'].includes(role);
+      case '/products':
+      case '/promotions':
+        return ['BRANCH_MANAGER', 'INVENTORY_OFFICER', 'FINANCE_OFFICER', 'VIEWER_AUDITOR'].includes(role);
+      case '/branches':
+        return ['BRANCH_MANAGER', 'INVENTORY_OFFICER'].includes(role);
+      case '/invoices':
+      case '/customers':
+      case '/suppliers':
+      case '/dealers':
+        return ['BRANCH_MANAGER', 'FINANCE_OFFICER', 'VIEWER_AUDITOR'].includes(role);
+      case '/sales-reps':
+      case '/sales-teams':
+        return ['BRANCH_MANAGER', 'FINANCE_OFFICER'].includes(role);
+      case '/credit':
+      case '/reports':
+        return ['BRANCH_MANAGER', 'FINANCE_OFFICER', 'VIEWER_AUDITOR'].includes(role);
+      case '/masters':
+        return ['BRANCH_MANAGER', 'INVENTORY_OFFICER'].includes(role);
+      case '/administration':
+      case '/audit-logs':
+        return false; // Only Admin/HQ can access
+      default:
+        return true;
+    }
+  });
+
   return (
     <Layout style={{ height: '100vh', overflow: 'hidden', background: 'transparent' }}>
       <Sider 
@@ -171,7 +217,7 @@ export const AdminLayout: React.FC = () => {
               mode="inline"
               selectedKeys={[location.pathname]}
               defaultOpenKeys={['master-data', 'system']}
-              items={menuItems}
+              items={filteredMenuItems}
               onClick={({ key }) => navigate(key)}
               style={{ border: 'none', background: 'transparent', padding: '8px' }}
             />

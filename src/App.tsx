@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { ConfigProvider } from 'antd';
+import { ConfigProvider, App as AntdApp } from 'antd';
 import { useAuthStore } from './store/auth.store';
 
 // Layouts
@@ -80,44 +80,46 @@ export const App: React.FC = () => {
         },
       }}
     >
-      <BrowserRouter>
-        <Routes>
-          <Route path="/login" element={<Login />} />
-          
-          <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'HQ_MANAGER', 'BRANCH_MANAGER', 'INVENTORY_OFFICER', 'FINANCE_OFFICER', 'VIEWER_AUDITOR']} />}>
-            <Route element={<AdminLayout />}>
-              <Route path="/" element={<Navigate to="/dashboard" replace />} />
-              <Route path="/dashboard" element={<Dashboard />} />
-              
-              <Route path="/orders" element={<Orders />} />
-              <Route path="/sales-returns" element={<SalesReturns />} />
-              <Route path="/invoices" element={<Invoices />} />
-              <Route path="/customers" element={<Customers />} />
-              <Route path="/products" element={<Products />} />
-              <Route path="/promotions" element={<Promotions />} />
-              <Route path="/branches" element={<Branches />} />
-              <Route path="/users" element={<Users />} />
-              <Route path="/roles" element={<Roles />} />
-              <Route path="/inventory" element={<Inventory />} />
-              <Route path="/inventory/transfers" element={<Transfers />} />
-              <Route path="/delivery" element={<Delivery />} />
-              
-              <Route path="/sales-reps" element={<SalesReps />} />
-              <Route path="/sales-teams" element={<SalesTeams />} />
-              <Route path="/credit" element={<Credit />} />
-              <Route path="/reports" element={<Reports />} />
-              <Route path="/masters" element={<Masters />} />
-              <Route path="/suppliers" element={<Suppliers />} />
-              <Route path="/dealers" element={<Dealers />} />
-              <Route path="/purchase-orders" element={<PurchaseOrders />} />
-              <Route path="/administration" element={<Administration />} />
-              <Route path="/audit-logs" element={<AuditLogs />} />
+      <AntdApp>
+        <BrowserRouter>
+          <Routes>
+            <Route path="/login" element={<Login />} />
+            
+            <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'HQ_MANAGER', 'BRANCH_MANAGER', 'INVENTORY_OFFICER', 'FINANCE_OFFICER', 'VIEWER_AUDITOR']} />}>
+              <Route element={<AdminLayout />}>
+                <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                <Route path="/dashboard" element={<Dashboard />} />
+                
+                <Route path="/orders" element={<Orders />} />
+                <Route path="/sales-returns" element={<SalesReturns />} />
+                <Route path="/invoices" element={<Invoices />} />
+                <Route path="/customers" element={<Customers />} />
+                <Route path="/products" element={<Products />} />
+                <Route path="/promotions" element={<Promotions />} />
+                <Route path="/branches" element={<Branches />} />
+                <Route path="/users" element={<Users />} />
+                <Route path="/roles" element={<Roles />} />
+                <Route path="/inventory" element={<Inventory />} />
+                <Route path="/inventory/transfers" element={<Transfers />} />
+                <Route path="/delivery" element={<Delivery />} />
+                
+                <Route path="/sales-reps" element={<SalesReps />} />
+                <Route path="/sales-teams" element={<SalesTeams />} />
+                <Route path="/credit" element={<Credit />} />
+                <Route path="/reports" element={<Reports />} />
+                <Route path="/masters" element={<Masters />} />
+                <Route path="/suppliers" element={<Suppliers />} />
+                <Route path="/dealers" element={<Dealers />} />
+                <Route path="/purchase-orders" element={<PurchaseOrders />} />
+                <Route path="/administration" element={<Administration />} />
+                <Route path="/audit-logs" element={<AuditLogs />} />
+              </Route>
             </Route>
-          </Route>
-          
-          <Route path="*" element={<Navigate to="/dashboard" replace />} />
-        </Routes>
-      </BrowserRouter>
+            
+            <Route path="*" element={<Navigate to="/dashboard" replace />} />
+          </Routes>
+        </BrowserRouter>
+      </AntdApp>
     </ConfigProvider>
   );
 };

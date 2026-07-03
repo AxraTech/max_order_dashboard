@@ -534,6 +534,8 @@ export const Invoices: React.FC = () => {
               { value: 'CASH', label: 'Cash' },
               { value: 'CHEQUE', label: 'Cheque' },
               { value: 'MOBILE_BANKING', label: 'Mobile Banking' },
+              { value: 'CREDIT_NOTE', label: 'Credit Note' },
+              { value: 'CREDIT_BALANCE', label: 'Credit Balance' },
             ]} />
           </Form.Item>
           <Form.Item name="paymentDate" label="Payment Date">

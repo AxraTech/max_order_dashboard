@@ -1,8 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { Card, Typography, Table, Tag, Input, Select, Space, Row, Col, Tooltip, Button, Modal, Form, InputNumber, DatePicker, Checkbox, Tabs, message, Popconfirm } from 'antd';
-import { SearchOutlined, CalendarOutlined, PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import { Card, Typography, Table, Tag, Input, Select, Space, Row, Col, Tooltip, Button, Modal, Form, InputNumber, DatePicker, Checkbox, Tabs, message, Popconfirm, Upload } from 'antd';
+import { SearchOutlined, CalendarOutlined, PlusOutlined, EditOutlined, DeleteOutlined, UploadOutlined, FileExcelOutlined, FilePdfOutlined } from '@ant-design/icons';
 import { api } from '../../services/api';
 import dayjs from 'dayjs';
+import * as XLSX from 'xlsx';
+import { jsPDF } from 'jspdf';
+import 'jspdf-autotable';
 
 const { Title, Text } = Typography;
 
@@ -14,6 +17,8 @@ interface BatchInfo {
   reservedQty: number;
   returnedQty: number;
   costPrice: number;
+  categoryDescription?: string | null;
+  damageStock: number;
   manufacturingDate?: string | null;
   notes?: string | null;
   expiryAlertThreshold: number;
@@ -40,6 +45,7 @@ interface StockItem {
     brandName: string | null;
     storageConditions: string | null;
     basePrice: number;
+    dealerPrice?: number;
   };
   warehouse: {
     id: string;
@@ -74,6 +80,11 @@ export const Inventory: React.FC = () => {
   const [branchesList, setBranchesList] = useState<any[]>([]);
   const [form] = Form.useForm();
 
+  // Creatable options for categoryDescription
+  const DEFAULT_CAT_DESCS = ['CPD', 'G1', 'G2', 'G3', 'PC', 'HOVID'];
+  const [catDescOptions, setCatDescOptions] = useState<string[]>(DEFAULT_CAT_DESCS);
+  const [catDescSearch, setCatDescSearch] = useState('');
+
   // Edit Batch State
   const [editingBatch, setEditingBatch] = useState<BatchInfo | null>(null);
   const [isEditBatchOpen, setIsEditBatchOpen] = useState(false);
@@ -87,6 +98,256 @@ export const Inventory: React.FC = () => {
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
+  const [importing, setImporting] = useState(false);
+  const [wiping, setWiping] = useState(false);
+
+  const handleWipeInventory = async () => {
+    try {
+      setWiping(true);
+      const res = await api.delete('/inventory/clear');
+      if (res.data.success) {
+        message.success('All inventory data successfully wiped!');
+        fetchStocks();
+      }
+    } catch (err: any) {
+      console.error('Wipe failed:', err);
+      message.error(err.response?.data?.message || 'Failed to wipe inventory data');
+    } finally {
+      setWiping(false);
+    }
+  };
+
+  const handleImportExcel = async (file: any) => {
+    try {
+      setImporting(true);
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      const res = await api.post('/inventory/import', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      
+      if (res.data.success) {
+        const { successCount, total, errors } = res.data.data;
+        message.success(`Successfully imported ${successCount}/${total} inventory items!`);
+        if (errors && errors.length > 0) {
+          console.warn('Import warnings:', errors);
+          message.warning(`${errors.length} products could not be matched. See console logs.`);
+        }
+        fetchStocks();
+      }
+    } catch (err: any) {
+      console.error('Import failed:', err);
+      message.error(err.response?.data?.message || 'Failed to import inventory');
+    } finally {
+      setImporting(false);
+    }
+    return false; // prevent automatic upload by antd
+  };
+
+  const fetchAllStocksForExport = async () => {
+    let whParam = selectedWarehouse === 'all' ? undefined : selectedWarehouse;
+    if (activeTab === 'hq') {
+      const hqWarehouse = warehouses.find(
+        (w) => w.code === 'WH-HQ' || w.name?.toLowerCase().includes('hq') || w.name?.toLowerCase().includes('main')
+      );
+      if (hqWarehouse) {
+        whParam = hqWarehouse.id;
+      }
+    }
+
+    const res = await api.get('/inventory', {
+      params: {
+        limit: 10000, // Fetch all records to bypass pagination limit
+        search: search || undefined,
+        warehouseId: whParam,
+      },
+    });
+    
+    if (res.data.success) {
+      return res.data.data;
+    }
+    throw new Error('Failed to fetch data');
+  };
+
+  const handleExportExcel = async () => {
+    const msgKey = 'export-excel';
+    try {
+      message.loading({ content: 'Generating Excel export (including all batches)...', key: msgKey });
+      const allStocks = await fetchAllStocksForExport();
+      
+      const exportData: any[] = [];
+      let index = 1;
+
+      allStocks.forEach((item: any) => {
+        if (item.batches && item.batches.length > 0) {
+          item.batches.forEach((batch: any) => {
+            const available = batch.quantity - batch.reservedQty;
+            const expiry = new Date(batch.expiryDate);
+            const isExpired = expiry < new Date();
+            const thirtyDays = new Date();
+            thirtyDays.setDate(thirtyDays.getDate() + 30);
+            const status = isExpired ? 'EXPIRED' : (expiry <= thirtyDays ? 'NEAR EXPIRY' : 'ACTIVE');
+
+            exportData.push({
+              'No': index++,
+              'Product Code': item.product.code,
+              'SKU': item.product.sku,
+              'Product Name': item.product.name,
+              'UOM': item.product.uom,
+              'Batch Number': batch.batchNumber,
+              'Expiry Date': expiry.toLocaleDateString(),
+              'Physical Qty': batch.quantity,
+              'Block Qty': batch.reservedQty,
+              'Returned Qty': batch.returnedQty || 0,
+              'Available Qty': available,
+              'Warehouse': item.warehouse.name,
+              'Branch': item.warehouse.branch.name,
+              'Batch Status': status
+            });
+          });
+        } else {
+          const available = item.quantity - item.reservedQty;
+          exportData.push({
+            'No': index++,
+            'Product Code': item.product.code,
+            'SKU': item.product.sku,
+            'Product Name': item.product.name,
+            'UOM': item.product.uom,
+            'Batch Number': '-',
+            'Expiry Date': '-',
+            'Physical Qty': item.quantity,
+            'Block Qty': item.reservedQty,
+            'Returned Qty': item.returnedQty || 0,
+            'Available Qty': available,
+            'Warehouse': item.warehouse.name,
+            'Branch': item.warehouse.branch.name,
+            'Batch Status': available <= item.minStockLevel ? 'CRITICAL STOCK' : (available <= item.safetyStock ? 'LOW STOCK' : 'HEALTHY')
+          });
+        }
+      });
+
+      const worksheet = XLSX.utils.json_to_sheet(exportData);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Inventory Batches');
+      
+      // Auto-fit column widths
+      const maxColWidth = exportData.reduce((acc: any, row: any) => {
+        Object.keys(row).forEach((key, idx) => {
+          const valLen = String(row[key] || '').length;
+          acc[idx] = Math.max(acc[idx] || 0, key.length, valLen);
+        });
+        return acc;
+      }, []);
+      worksheet['!cols'] = maxColWidth.map((w: number) => ({ w: w + 2 }));
+
+      XLSX.writeFile(workbook, `Inventory_Batch_Report_${dayjs().format('YYYY-MM-DD')}.xlsx`);
+      message.success({ content: 'Excel report exported successfully', key: msgKey });
+    } catch (err: any) {
+      console.error('Failed to export Excel:', err);
+      message.error({ content: 'Failed to generate Excel export', key: msgKey });
+    }
+  };
+
+  const handleExportPDF = async () => {
+    const msgKey = 'export-pdf';
+    try {
+      message.loading({ content: 'Generating PDF export (including all batches)...', key: msgKey });
+      const allStocks = await fetchAllStocksForExport();
+
+      const doc = new jsPDF('landscape');
+      
+      doc.setFontSize(16);
+      doc.text('MaxOrder Inventory Stock Control Report (Batch Level)', 14, 15);
+      
+      doc.setFontSize(10);
+      doc.text(`Generated on: ${new Date().toLocaleString()} | Total Items: ${allStocks.length}`, 14, 22);
+      
+      const tableColumn = [
+        'No', 'Code', 'SKU', 'Product Name', 'UOM', 'Batch No', 'Expiry Date', 'Physical Qty', 'Block Qty', 'Returned Qty', 'Available Qty', 'Warehouse', 'Status'
+      ];
+      
+      const tableRows: any[] = [];
+      let index = 1;
+
+      allStocks.forEach((item: any) => {
+        if (item.batches && item.batches.length > 0) {
+          item.batches.forEach((batch: any) => {
+            const available = batch.quantity - batch.reservedQty;
+            const expiry = new Date(batch.expiryDate);
+            const isExpired = expiry < new Date();
+            const thirtyDays = new Date();
+            thirtyDays.setDate(thirtyDays.getDate() + 30);
+            const status = isExpired ? 'EXPIRED' : (expiry <= thirtyDays ? 'NEAR EXPIRY' : 'ACTIVE');
+
+            tableRows.push([
+              index++,
+              item.product.code,
+              item.product.sku,
+              item.product.name,
+              item.product.uom,
+              batch.batchNumber,
+              expiry.toLocaleDateString(),
+              batch.quantity,
+              batch.reservedQty,
+              batch.returnedQty || 0,
+              available,
+              `${item.warehouse.name} (${item.warehouse.branch.name.replace(' Branch', '')})`,
+              status
+            ]);
+          });
+        } else {
+          const available = item.quantity - item.reservedQty;
+          const status = available <= item.minStockLevel ? 'CRITICAL' : (available <= item.safetyStock ? 'LOW' : 'HEALTHY');
+          tableRows.push([
+            index++,
+            item.product.code,
+            item.product.sku,
+            item.product.name,
+            item.product.uom,
+            '-',
+            '-',
+            item.quantity,
+            item.reservedQty,
+            item.returnedQty || 0,
+            available,
+            `${item.warehouse.name} (${item.warehouse.branch.name.replace(' Branch', '')})`,
+            status
+          ]);
+        }
+      });
+
+      (doc as any).autoTable({
+        head: [tableColumn],
+        body: tableRows,
+        startY: 26,
+        theme: 'striped',
+        headStyles: { fillColor: [79, 70, 229] },
+        styles: { fontSize: 8 },
+        columnStyles: {
+          0: { cellWidth: 10 },
+          1: { cellWidth: 20 },
+          2: { cellWidth: 20 },
+          3: { cellWidth: 40 },
+          4: { cellWidth: 12 },
+          5: { cellWidth: 35 },
+          6: { cellWidth: 20 },
+          7: { cellWidth: 18 },
+          8: { cellWidth: 16 },
+          9: { cellWidth: 18 },
+          10: { cellWidth: 18 },
+          11: { cellWidth: 35 },
+          12: { cellWidth: 20 }
+        }
+      });
+      
+      doc.save(`Inventory_Batch_Report_${dayjs().format('YYYY-MM-DD')}.pdf`);
+      message.success({ content: 'PDF report exported successfully', key: msgKey });
+    } catch (err: any) {
+      console.error('Failed to export PDF:', err);
+      message.error({ content: 'Failed to generate PDF export', key: msgKey });
+    }
+  };
   const [totalItems, setTotalItems] = useState(0);
 
   useEffect(() => {
@@ -140,6 +401,8 @@ export const Inventory: React.FC = () => {
       costPrice: Number(batch.costPrice),
       expiryDate: dayjs(batch.expiryDate),
       manufacturingDate: batch.manufacturingDate ? dayjs(batch.manufacturingDate) : null,
+      categoryDescription: batch.categoryDescription,
+      damageStock: batch.damageStock ?? 0,
       notes: batch.notes,
       expiryAlertThreshold: batch.expiryAlertThreshold || 30,
     });
@@ -269,7 +532,7 @@ export const Inventory: React.FC = () => {
     }
 
     if (available <= 0) {
-      return <Tag color="default" style={{ border: 'none', borderRadius: '12px', fontWeight: 500 }}>RESERVED</Tag>;
+      return <Tag color="default" style={{ border: 'none', borderRadius: '12px', fontWeight: 500 }}>BLOCKED</Tag>;
     }
 
     return <Tag color="green" style={{ border: 'none', borderRadius: '12px', fontWeight: 500 }}>ACTIVE</Tag>;
@@ -310,13 +573,19 @@ export const Inventory: React.FC = () => {
         render: (dateStr: string | null) => dateStr ? new Date(dateStr).toLocaleDateString() : <Text type="secondary">-</Text>,
       },
       {
+        title: 'Category Desc',
+        dataIndex: 'categoryDescription',
+        key: 'categoryDescription',
+        render: (val: string | null) => val ? <Tag color="blue" style={{ border: 'none', borderRadius: '8px' }}>{val}</Tag> : <Text type="secondary">-</Text>,
+      },
+      {
         title: 'Physical Qty',
         dataIndex: 'quantity',
         key: 'quantity',
         render: (val: number) => <strong>{val}</strong>,
       },
       {
-        title: 'Reserved Qty',
+        title: 'Block Qty',
         dataIndex: 'reservedQty',
         key: 'reservedQty',
         render: (val: number) => <span style={{ color: val > 0 ? 'var(--warning-color)' : 'inherit' }}>{val}</span>,
@@ -326,6 +595,12 @@ export const Inventory: React.FC = () => {
         dataIndex: 'returnedQty',
         key: 'returnedQty',
         render: (val: number) => <span style={{ color: val > 0 ? '#10B981' : 'inherit' }}>{val || 0}</span>,
+      },
+      {
+        title: 'Damage Qty',
+        dataIndex: 'damageStock',
+        key: 'damageStock',
+        render: (val: number) => <span style={{ color: val > 0 ? '#EF4444' : 'inherit', fontWeight: val > 0 ? 600 : 'normal' }}>{val || 0}</span>,
       },
       {
         title: 'Available Qty',
@@ -454,7 +729,7 @@ export const Inventory: React.FC = () => {
       ),
     },
     {
-      title: 'Reserved Qty',
+      title: 'Block Qty',
       dataIndex: 'reservedQty',
       key: 'reservedQty',
       render: (val: number, record: StockItem) => (
@@ -499,14 +774,59 @@ export const Inventory: React.FC = () => {
     <div className="animate-fade-in" style={{ paddingBottom: '24px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
         <Title level={2} style={{ margin: 0, fontWeight: 700 }}>Inventory Control & FEFO Batches</Title>
-        <Button
-          type="primary"
-          icon={<PlusOutlined />}
-          onClick={() => setIsModalOpen(true)}
-          style={{ borderRadius: '12px' }}
-        >
-          Add Inventory
-        </Button>
+        <Space>
+          <Button
+            icon={<FileExcelOutlined />}
+            onClick={handleExportExcel}
+            style={{ borderRadius: '12px' }}
+          >
+            Export Excel
+          </Button>
+          <Button
+            icon={<FilePdfOutlined />}
+            onClick={handleExportPDF}
+            style={{ borderRadius: '12px' }}
+          >
+            Export PDF
+          </Button>
+          <Upload
+            accept=".xlsx"
+            showUploadList={false}
+            beforeUpload={handleImportExcel}
+          >
+            <Button
+              icon={<UploadOutlined />}
+              style={{ borderRadius: '12px' }}
+              loading={importing}
+            >
+              Import Excel
+            </Button>
+          </Upload>
+          <Popconfirm
+            title="Wipe All Inventory?"
+            description="Are you sure you want to delete all stocks, batches, and movements? This cannot be undone."
+            onConfirm={handleWipeInventory}
+            okText="Yes, Wipe"
+            cancelText="Cancel"
+            okButtonProps={{ danger: true, loading: wiping }}
+          >
+            <Button
+              danger
+              icon={<DeleteOutlined />}
+              style={{ borderRadius: '12px' }}
+            >
+              Wipe Inventory
+            </Button>
+          </Popconfirm>
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={() => setIsModalOpen(true)}
+            style={{ borderRadius: '12px' }}
+          >
+            Add Inventory
+          </Button>
+        </Space>
       </div>
 
       {/* Tabs for All Stock vs Expired */}
@@ -595,7 +915,7 @@ export const Inventory: React.FC = () => {
         }}
         footer={null}
         width={600}
-        destroyOnClose
+        destroyOnHidden
       >
         <Form
           form={form}
@@ -700,6 +1020,44 @@ export const Inventory: React.FC = () => {
             </Col>
           </Row>
 
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item name="categoryDescription" label="Category Description">
+                <Select
+                  showSearch
+                  allowClear
+                  placeholder="e.g. CPD, G1, G2..."
+                  style={{ borderRadius: '8px' }}
+                  onSearch={(val) => setCatDescSearch(val)}
+                  dropdownRender={(menu) => (
+                    <>
+                      {menu}
+                      {catDescSearch && !catDescOptions.includes(catDescSearch) && (
+                        <div
+                          style={{ padding: '8px 12px', cursor: 'pointer', color: 'var(--primary-color)', borderTop: '1px solid #f0f0f0' }}
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => {
+                            setCatDescOptions((prev) => [...prev, catDescSearch]);
+                            form.setFieldValue('categoryDescription', catDescSearch);
+                            setCatDescSearch('');
+                          }}
+                        >
+                          + Create "{catDescSearch}"
+                        </div>
+                      )}
+                    </>
+                  )}
+                  options={catDescOptions.map((o) => ({ label: o, value: o }))}
+                />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="damageStock" label="Damage Stock (Qty)">
+                <InputNumber min={0} style={{ width: '100%', borderRadius: '8px' }} placeholder="0" />
+              </Form.Item>
+            </Col>
+          </Row>
+
           <Form.Item
             name="branchIds"
             label="Branch Assignment (Inventory belongs to one or multiple branches)"
@@ -735,7 +1093,7 @@ export const Inventory: React.FC = () => {
         open={isEditBatchOpen}
         onCancel={() => { setIsEditBatchOpen(false); setEditingBatch(null); batchForm.resetFields(); }}
         footer={null}
-        destroyOnClose
+        destroyOnHidden
       >
         <Form
           form={batchForm}
@@ -786,6 +1144,44 @@ export const Inventory: React.FC = () => {
                 rules={[{ required: true, message: 'Please select expiry date!' }]}
               >
                 <DatePicker style={{ width: '100%', borderRadius: '8px' }} placeholder="Select expiry date" />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item name="categoryDescription" label="Category Description">
+                <Select
+                  showSearch
+                  allowClear
+                  placeholder="e.g. CPD, G1, G2..."
+                  style={{ borderRadius: '8px' }}
+                  onSearch={(val) => setCatDescSearch(val)}
+                  dropdownRender={(menu) => (
+                    <>
+                      {menu}
+                      {catDescSearch && !catDescOptions.includes(catDescSearch) && (
+                        <div
+                          style={{ padding: '8px 12px', cursor: 'pointer', color: 'var(--primary-color)', borderTop: '1px solid #f0f0f0' }}
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => {
+                            setCatDescOptions((prev) => [...prev, catDescSearch]);
+                            batchForm.setFieldValue('categoryDescription', catDescSearch);
+                            setCatDescSearch('');
+                          }}
+                        >
+                          + Create "{catDescSearch}"
+                        </div>
+                      )}
+                    </>
+                  )}
+                  options={catDescOptions.map((o) => ({ label: o, value: o }))}
+                />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="damageStock" label="Damage Stock (Qty)">
+                <InputNumber min={0} style={{ width: '100%', borderRadius: '8px' }} placeholder="0" />
               </Form.Item>
             </Col>
           </Row>

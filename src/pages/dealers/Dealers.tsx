@@ -19,6 +19,12 @@ interface DealerRecord {
   phone: string | null;
   email: string | null;
   address: string | null;
+  region: string | null;
+  city: string | null;
+  township: string | null;
+  channel: string | null;
+  channelDescription: string | null;
+  groupName: string | null;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -99,6 +105,12 @@ export const Dealers: React.FC = () => {
       phone: record.phone,
       email: record.email,
       address: record.address,
+      region: record.region,
+      city: record.city,
+      township: record.township,
+      channel: record.channel,
+      channelDescription: record.channelDescription,
+      groupName: record.groupName,
       isActive: record.isActive,
     });
     setIsModalOpen(true);
@@ -160,6 +172,42 @@ export const Dealers: React.FC = () => {
       dataIndex: 'name',
       key: 'name',
       render: (text: string) => <Text strong>{text}</Text>,
+    },
+    {
+      title: 'Region',
+      dataIndex: 'region',
+      key: 'region',
+      render: (text: string | null) => text || <Text type="secondary">-</Text>,
+    },
+    {
+      title: 'City',
+      dataIndex: 'city',
+      key: 'city',
+      render: (text: string | null) => text || <Text type="secondary">-</Text>,
+    },
+    {
+      title: 'Township',
+      dataIndex: 'township',
+      key: 'township',
+      render: (text: string | null) => text || <Text type="secondary">-</Text>,
+    },
+    {
+      title: 'Channel',
+      dataIndex: 'channel',
+      key: 'channel',
+      render: (text: string | null) => text || <Text type="secondary">-</Text>,
+    },
+    {
+      title: 'Channel Description',
+      dataIndex: 'channelDescription',
+      key: 'channelDescription',
+      render: (text: string | null) => text || <Text type="secondary">-</Text>,
+    },
+    {
+      title: 'Customer Group Name',
+      dataIndex: 'groupName',
+      key: 'groupName',
+      render: (text: string | null) => text || <Text type="secondary">-</Text>,
     },
     {
       title: 'Contact Person',
@@ -357,6 +405,63 @@ export const Dealers: React.FC = () => {
             <Input.TextArea placeholder="Enter office/warehouse address" rows={3} style={{ borderRadius: '12px' }} />
           </Form.Item>
 
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                name="region"
+                label="Region"
+              >
+                <Input placeholder="e.g. Lower" />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                name="city"
+                label="City"
+              >
+                <Input placeholder="e.g. Bago" />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                name="township"
+                label="Township"
+              >
+                <Input placeholder="e.g. Bago" />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                name="groupName"
+                label="Group Name"
+              >
+                <Input placeholder="e.g. Partner Channel" />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                name="channel"
+                label="Channel"
+              >
+                <Input placeholder="e.g. Partner Channel" />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                name="channelDescription"
+                label="Channel Description"
+              >
+                <Input placeholder="e.g. Partner Channel" />
+              </Form.Item>
+            </Col>
+          </Row>
+
           <Form.Item
             name="isActive"
             label="Status"
@@ -407,6 +512,24 @@ export const Dealers: React.FC = () => {
             </Descriptions.Item>
             <Descriptions.Item label="Address">
               {detailDealer.address || '-'}
+            </Descriptions.Item>
+            <Descriptions.Item label="Region">
+              {detailDealer.region || '-'}
+            </Descriptions.Item>
+            <Descriptions.Item label="City">
+              {detailDealer.city || '-'}
+            </Descriptions.Item>
+            <Descriptions.Item label="Township">
+              {detailDealer.township || '-'}
+            </Descriptions.Item>
+            <Descriptions.Item label="Channel">
+              {detailDealer.channel || '-'}
+            </Descriptions.Item>
+            <Descriptions.Item label="Channel Description">
+              {detailDealer.channelDescription || '-'}
+            </Descriptions.Item>
+            <Descriptions.Item label="Group Name">
+              {detailDealer.groupName || '-'}
             </Descriptions.Item>
             <Descriptions.Item label="Status">
               <Tag color={detailDealer.isActive ? 'green' : 'red'}>

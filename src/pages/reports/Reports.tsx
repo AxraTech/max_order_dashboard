@@ -6,7 +6,7 @@ import {
 import {
   ReloadOutlined, CalendarOutlined, FileTextOutlined,
   BarChartOutlined, DollarOutlined, ShoppingCartOutlined,
-  StarOutlined, PercentageOutlined
+  StarOutlined, PercentageOutlined, DownloadOutlined
 } from '@ant-design/icons';
 import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid,
@@ -16,6 +16,7 @@ import { useAuthStore } from '../../store/auth.store';
 import { api } from '../../services/api';
 import { CURRENCY } from '../../types/index';
 import dayjs from 'dayjs';
+import * as XLSX from 'xlsx-js-style';
 
 const { Title, Text } = Typography;
 
@@ -73,6 +74,7 @@ export const Reports: React.FC = () => {
   const [dailySales, setDailySales] = useState<any[]>([]);
   const [systemSales, setSystemSales] = useState<any[]>([]);
   const [itemSales, setItemSales] = useState<any[]>([]);
+  const [saleDetail, setSaleDetail] = useState<any[]>([]);
 
   // Fetch dropdown data on mount
   useEffect(() => {
@@ -123,6 +125,9 @@ export const Reports: React.FC = () => {
       } else if (activeTab === 'item') {
         const res = await api.get('/reports/item-sales', { params });
         if (res.data.success) setItemSales(res.data.data);
+      } else if (activeTab === 'sale-detail') {
+        const res = await api.get('/reports/sale-detail', { params });
+        if (res.data.success) setSaleDetail(res.data.data);
       }
     } catch (err: any) {
       message.error(err.response?.data?.message || 'Failed to load report data');
@@ -203,6 +208,175 @@ export const Reports: React.FC = () => {
       color: colors[name] || '#cbd5e1'
     }));
   }, [systemSales]);
+
+  // ─── Sale Detail Excel Export ───────────────────────────────────────────────
+  const handleExportSaleDetail = () => {
+    if (saleDetail.length === 0) { message.warning('No data to export'); return; }
+
+    const branchName = selectedBranch === 'all'
+      ? 'All Branches'
+      : branches.find(b => b.id === selectedBranch)?.name || 'All Branches';
+    
+    // Dynamic company name reflecting the selected branch
+    const companyName = `MEN Company (2026 -2027) New ( ${branchName} )`;
+    const reportTitle = 'Sale Details Information By InvoiceDate AND Invoice ID';
+    const fromDate = dateRange?.[0]?.format('DD/MM/YYYY') ?? '';
+    const toDate = dateRange?.[1]?.format('DD/MM/YYYY') ?? '';
+    const period = `From ${fromDate} To ${toDate}`;
+
+    const COLS = ['No','Invoice ID','Invoice Date','Customer ID','Customer Name',
+      'Stock ID','Stock Name','Cur:ID','Rate','Quantity','UM ID','Price',
+      'Total Amount','Discount %','Discount','Net Price','Amount',
+      'Commission','Expenses','Tax','NetAmount','Paid Amount',
+      'Operator','Distribution','Staff','Warranty ID','Remark','Category'];
+
+    // Build rows grouped by date → invoice with subtotals
+    type WsRow = (string | number | null)[];
+    const wsRows: WsRow[] = [];
+    wsRows.push([companyName, ...Array(COLS.length - 1).fill(null)]);
+    wsRows.push([reportTitle, ...Array(COLS.length - 1).fill(null)]);
+    wsRows.push([period, ...Array(COLS.length - 1).fill(null)]);
+    wsRows.push(COLS as WsRow);
+
+    // Group rows by date then invoice
+    const byDate: Record<string, Record<string, any[]>> = {};
+    saleDetail.forEach((r: any) => {
+      if (!byDate[r.invoiceDate]) byDate[r.invoiceDate] = {};
+      if (!byDate[r.invoiceDate][r.invoiceId]) byDate[r.invoiceDate][r.invoiceId] = [];
+      byDate[r.invoiceDate][r.invoiceId].push(r);
+    });
+
+    Object.entries(byDate).forEach(([date, byInv]) => {
+      // Date header row
+      const firstInvId = Object.keys(byInv)[0];
+      wsRows.push([`${date}  ${firstInvId}`, ...Array(COLS.length - 1).fill(null)]);
+
+      Object.entries(byInv).forEach(([_invId, lines]) => {
+        lines.forEach((r: any) => {
+          wsRows.push([r.no, r.invoiceId, r.invoiceDate, r.customerId, r.customerName,
+            r.stockId, r.stockName, r.curId, r.rate, r.quantity, r.umId, r.price,
+            r.totalAmount, r.discountPct, r.discount, r.netPrice, r.amount,
+            r.commission, r.expenses, r.tax, r.netAmount, r.paidAmount,
+            r.operator, r.distribution, r.staff, r.warrantyId, r.remark, r.category]);
+        });
+
+        // Invoice subtotal
+        const subQty = lines.reduce((s: number, r: any) => s + r.quantity, 0);
+        const subAmt = lines.reduce((s: number, r: any) => s + r.amount, 0);
+        const subDisc = lines.reduce((s: number, r: any) => s + r.discount, 0);
+        const subNet = lines.reduce((s: number, r: any) => s + r.netAmount, 0);
+        wsRows.push([`Sub Total ( ${lines[0].invoiceId} )`,
+          null, null, null, null, null, null, null, null, subQty, null, null,
+          null, null, subDisc, null, subAmt, null, null, null, subNet, null,
+          null, null, null, null, null, null]);
+      });
+
+      // Date subtotal
+      const dateLines = Object.values(byInv).flat();
+      const dQty = dateLines.reduce((s: number, r: any) => s + r.quantity, 0);
+      const dAmt = dateLines.reduce((s: number, r: any) => s + r.amount, 0);
+      const dDisc = dateLines.reduce((s: number, r: any) => s + r.discount, 0);
+      const dNet = dateLines.reduce((s: number, r: any) => s + r.netAmount, 0);
+      wsRows.push([`Sub Total ( ${date} )`,
+        null, null, null, null, null, null, null, null, dQty, null, null,
+        null, null, dDisc, null, dAmt, null, null, null, dNet, null,
+        null, null, null, null, null, null]);
+    });
+
+    // Grand total row
+    const gQty = saleDetail.reduce((s: number, r: any) => s + r.quantity, 0);
+    const gAmt = saleDetail.reduce((s: number, r: any) => s + r.amount, 0);
+    const gDisc = saleDetail.reduce((s: number, r: any) => s + r.discount, 0);
+    const gNet = saleDetail.reduce((s: number, r: any) => s + r.netAmount, 0);
+    wsRows.push(['Grand Total',
+      null, null, null, null, null, null, null, null, gQty, null, null,
+      null, null, gDisc, null, gAmt, null, null, null, gNet, null,
+      null, null, null, null, null, null]);
+
+    const ws = XLSX.utils.aoa_to_sheet(wsRows);
+
+    // Column widths
+    ws['!cols'] = [8,14,14,14,28,20,30,8,6,10,8,14,14,12,12,14,14,
+      12,12,10,14,14,12,14,20,12,16,12].map(w => ({ wch: w }));
+
+    // Merge title rows
+    ws['!merges'] = [
+      { s: { r: 0, c: 0 }, e: { r: 0, c: COLS.length - 1 } },
+      { s: { r: 1, c: 0 }, e: { r: 1, c: COLS.length - 1 } },
+      { s: { r: 2, c: 0 }, e: { r: 2, c: COLS.length - 1 } },
+    ];
+
+    // Define alignment helper
+    const centerAlign = { horizontal: 'center', vertical: 'center' };
+
+    // Loop through all keys to style them beautifully
+    Object.keys(ws).forEach(key => {
+      if (key.startsWith('!')) return;
+      const cell = ws[key];
+      const rowNum = parseInt(key.replace(/^[A-Z]+/, ''), 10);
+
+      if (rowNum === 1) {
+        cell.s = {
+          font: { bold: true, sz: 14, name: 'Calibri' },
+          alignment: centerAlign
+        };
+      } else if (rowNum === 2) {
+        cell.s = {
+          font: { bold: true, sz: 12, name: 'Calibri' },
+          alignment: centerAlign
+        };
+      } else if (rowNum === 3) {
+        cell.s = {
+          font: { sz: 10, italic: true, name: 'Calibri' },
+          alignment: centerAlign
+        };
+      } else if (rowNum === 4) {
+        // Headers row style
+        cell.s = {
+          font: { bold: true, sz: 10, name: 'Calibri' },
+          alignment: centerAlign,
+          fill: { fgColor: { rgb: 'EAEAEA' } },
+          border: {
+            top: { style: 'thin', color: { rgb: 'CCCCCC' } },
+            bottom: { style: 'thin', color: { rgb: 'CCCCCC' } },
+            left: { style: 'thin', color: { rgb: 'CCCCCC' } },
+            right: { style: 'thin', color: { rgb: 'CCCCCC' } }
+          }
+        };
+      } else {
+        // Find if this is a subtotal / grandtotal or date header row
+        const firstCellInRow = ws[`A${rowNum}`];
+        const val = firstCellInRow ? String(firstCellInRow.v || '') : '';
+
+        if (val.startsWith('Sub Total') || val === 'Grand Total') {
+          cell.s = {
+            font: { bold: true, sz: 10, name: 'Calibri' },
+            fill: { fgColor: { rgb: 'F5F3FF' } } // Soft purple background for totals
+          };
+        } else if (val.includes('SAMPLE') || (val && !isNaN(Date.parse(val.split(' ')[0])))) {
+          // Date section headers style
+          cell.s = {
+            font: { bold: true, sz: 10.5, name: 'Calibri' },
+            fill: { fgColor: { rgb: 'F0F4F8' } } // Soft gray-blue background
+          };
+        } else {
+          // Regular data rows
+          const colLetter = key.replace(/[0-9]+/, '');
+          const rightAlignCols = ['I', 'J', 'L', 'M', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W'];
+          
+          cell.s = {
+            font: { sz: 9.5, name: 'Calibri' },
+            alignment: rightAlignCols.includes(colLetter) ? { horizontal: 'right' } : undefined
+          };
+        }
+      }
+    });
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'data');
+    XLSX.writeFile(wb, `Sale_Report_${fromDate}_${toDate}.xlsx`);
+    message.success('Sale Detail Report exported successfully!');
+  };
 
   return (
     <div className="animate-fade-in" style={{ paddingBottom: '24px' }}>
@@ -695,6 +869,152 @@ export const Reports: React.FC = () => {
                       { title: 'Total Discounts Given', dataIndex: 'totalDiscount', key: 'totalDiscount', render: (v) => `${Number(v).toLocaleString()} ${CURRENCY.symbol}` },
                       { title: 'Total Revenue', dataIndex: 'totalRevenue', key: 'totalRevenue', sorter: (a, b) => a.totalRevenue - b.totalRevenue, render: (v) => <Text strong style={{ color: '#8B5CF6' }}>{Number(v).toLocaleString()} {CURRENCY.symbol}</Text> }
                     ]}
+                  />
+                </Card>
+              </Spin>
+            )
+          }
+          // ================= SALE DETAIL TAB =================
+          ,{
+            key: 'sale-detail',
+            label: (
+              <span>
+                <FileTextOutlined />
+                Sale Detail Report
+              </span>
+            ),
+            children: (
+              <Spin spinning={loading}>
+                {/* KPI Strip */}
+                <Row gutter={[16, 16]} style={{ marginBottom: '20px' }}>
+                  <Col xs={24} sm={12} md={6}>
+                    <Card className="glass-card" variant="borderless">
+                      <Statistic
+                        title="Total Line Items"
+                        value={saleDetail.length}
+                        prefix={<FileTextOutlined style={{ color: '#8B5CF6' }} />}
+                        valueStyle={{ color: '#8B5CF6', fontWeight: 700 }}
+                      />
+                    </Card>
+                  </Col>
+                  <Col xs={24} sm={12} md={6}>
+                    <Card className="glass-card" variant="borderless">
+                      <Statistic
+                        title="Unique Invoices"
+                        value={new Set(saleDetail.map((r: any) => r.invoiceId)).size}
+                        prefix={<ShoppingCartOutlined style={{ color: '#06B6D4' }} />}
+                        valueStyle={{ color: '#06B6D4', fontWeight: 700 }}
+                      />
+                    </Card>
+                  </Col>
+                  <Col xs={24} sm={12} md={6}>
+                    <Card className="glass-card" variant="borderless">
+                      <Statistic
+                        title="Total Revenue (MMK)"
+                        value={saleDetail.reduce((s: number, r: any) => s + r.amount, 0)}
+                        formatter={(v: any) => Number(v).toLocaleString()}
+                        prefix={<DollarOutlined style={{ color: '#10B981' }} />}
+                        valueStyle={{ color: '#10B981', fontWeight: 700 }}
+                      />
+                    </Card>
+                  </Col>
+                  <Col xs={24} sm={12} md={6}>
+                    <Card className="glass-card" variant="borderless">
+                      <Statistic
+                        title="Total Discount (MMK)"
+                        value={saleDetail.reduce((s: number, r: any) => s + r.discount, 0)}
+                        formatter={(v: any) => Number(v).toLocaleString()}
+                        prefix={<PercentageOutlined style={{ color: '#F59E0B' }} />}
+                        valueStyle={{ color: '#F59E0B', fontWeight: 700 }}
+                      />
+                    </Card>
+                  </Col>
+                </Row>
+
+                {/* Export Button + Table */}
+                <Card
+                  className="glass-card"
+                  variant="borderless"
+                  title={<span style={{ fontWeight: 700 }}>Sale Details — By Invoice Date & Invoice ID</span>}
+                  extra={
+                    <Button
+                      type="primary"
+                      icon={<DownloadOutlined />}
+                      onClick={handleExportSaleDetail}
+                      style={{ background: 'linear-gradient(135deg,#8B5CF6,#6366F1)', border: 'none', borderRadius: 10 }}
+                    >
+                      Export Excel
+                    </Button>
+                  }
+                  styles={{ body: { padding: 0 } }}
+                >
+                  <Table
+                    dataSource={saleDetail.map((r: any, i: number) => ({ ...r, key: i }))}
+                    scroll={{ x: 2000 }}
+                    size="small"
+                    pagination={{ pageSize: 50, showSizeChanger: true, showTotal: (t) => `${t} line items` }}
+                    columns={[
+                      { title: 'No', dataIndex: 'no', key: 'no', width: 55, fixed: 'left' },
+                      { title: 'Invoice ID', dataIndex: 'invoiceId', key: 'invoiceId', width: 130, fixed: 'left',
+                        render: (v: string) => <Typography.Text code style={{ fontWeight: 600 }}>{v}</Typography.Text> },
+                      { title: 'Invoice Date', dataIndex: 'invoiceDate', key: 'invoiceDate', width: 110,
+                        render: (v: string) => <Tag color="blue">{v}</Tag> },
+                      { title: 'Customer ID', dataIndex: 'customerId', key: 'customerId', width: 110 },
+                      { title: 'Customer Name', dataIndex: 'customerName', key: 'customerName', width: 200,
+                        render: (v: string) => <Typography.Text ellipsis={{ tooltip: v }} style={{ maxWidth: 190 }}>{v}</Typography.Text> },
+                      { title: 'Stock ID', dataIndex: 'stockId', key: 'stockId', width: 150,
+                        render: (v: string) => <Typography.Text code>{v}</Typography.Text> },
+                      { title: 'Stock Name', dataIndex: 'stockName', key: 'stockName', width: 200,
+                        render: (v: string) => <Typography.Text ellipsis={{ tooltip: v }} style={{ maxWidth: 190 }}>{v}</Typography.Text> },
+                      { title: 'Cur', dataIndex: 'curId', key: 'curId', width: 60 },
+                      { title: 'Qty', dataIndex: 'quantity', key: 'quantity', width: 70,
+                        render: (v: number) => <Typography.Text strong>{v}</Typography.Text> },
+                      { title: 'UOM', dataIndex: 'umId', key: 'umId', width: 70 },
+                      { title: 'Price', dataIndex: 'price', key: 'price', width: 110,
+                        render: (v: number) => v.toLocaleString() },
+                      { title: 'Total Amt', dataIndex: 'totalAmount', key: 'totalAmount', width: 120,
+                        render: (v: number) => v.toLocaleString() },
+                      { title: 'Disc%', dataIndex: 'discountPct', key: 'discountPct', width: 75,
+                        render: (v: number) => `${v}%` },
+                      { title: 'Discount', dataIndex: 'discount', key: 'discount', width: 100,
+                        render: (v: number) => v.toLocaleString() },
+                      { title: 'Net Price', dataIndex: 'netPrice', key: 'netPrice', width: 110,
+                        render: (v: number) => v.toLocaleString() },
+                      { title: 'Amount', dataIndex: 'amount', key: 'amount', width: 120,
+                        render: (v: number) => <Typography.Text strong style={{ color: '#8B5CF6' }}>{v.toLocaleString()}</Typography.Text> },
+                      { title: 'Tax', dataIndex: 'tax', key: 'tax', width: 90,
+                        render: (v: number) => v.toLocaleString() },
+                      { title: 'Net Amount', dataIndex: 'netAmount', key: 'netAmount', width: 120,
+                        render: (v: number) => <Typography.Text strong style={{ color: '#10B981' }}>{v.toLocaleString()}</Typography.Text> },
+                      { title: 'Paid Amt', dataIndex: 'paidAmount', key: 'paidAmount', width: 110,
+                        render: (v: number) => v > 0 ? <Tag color="green">{v.toLocaleString()}</Tag> : <Tag color="orange">Unpaid</Tag> },
+                      { title: 'Staff', dataIndex: 'staff', key: 'staff', width: 160 },
+                      { title: 'Remark', dataIndex: 'remark', key: 'remark', width: 120 },
+                      { title: 'Category', dataIndex: 'category', key: 'category', width: 120,
+                        render: (v: string) => v ? <Tag color="purple">{v}</Tag> : null },
+                    ]}
+                    summary={(pageData) => {
+                      const sumQty = pageData.reduce((s, r) => s + r.quantity, 0);
+                      const sumAmt = pageData.reduce((s, r) => s + r.amount, 0);
+                      const sumDisc = pageData.reduce((s, r) => s + r.discount, 0);
+                      const sumNet = pageData.reduce((s, r) => s + r.netAmount, 0);
+                      return (
+                        <Table.Summary.Row style={{ background: '#f3f0ff', fontWeight: 700 }}>
+                          <Table.Summary.Cell index={0} colSpan={9}>Page Total</Table.Summary.Cell>
+                          <Table.Summary.Cell index={9}>{sumQty}</Table.Summary.Cell>
+                          <Table.Summary.Cell index={10} />
+                          <Table.Summary.Cell index={11} />
+                          <Table.Summary.Cell index={12} />
+                          <Table.Summary.Cell index={13} />
+                          <Table.Summary.Cell index={14}>{sumDisc.toLocaleString()}</Table.Summary.Cell>
+                          <Table.Summary.Cell index={15} />
+                          <Table.Summary.Cell index={16}><span style={{ color: '#8B5CF6' }}>{sumAmt.toLocaleString()}</span></Table.Summary.Cell>
+                          <Table.Summary.Cell index={17} />
+                          <Table.Summary.Cell index={18}><span style={{ color: '#10B981' }}>{sumNet.toLocaleString()}</span></Table.Summary.Cell>
+                          <Table.Summary.Cell index={19} colSpan={6} />
+                        </Table.Summary.Row>
+                      );
+                    }}
                   />
                 </Card>
               </Spin>
