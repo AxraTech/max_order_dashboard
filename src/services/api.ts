@@ -1,8 +1,10 @@
 import axios from 'axios';
 
+const apiBaseURL = (import.meta.env.VITE_API_URL || '/api').replace(/\/$/, '');
+
 // Create base axios instance
 export const api = axios.create({
-  baseURL: '/api',
+  baseURL: apiBaseURL,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -37,7 +39,7 @@ api.interceptors.response.use(
         }
         
         // Try to get a new token
-        const res = await axios.post('/api/auth/refresh-token', { refreshToken });
+        const res = await axios.post(`${apiBaseURL}/auth/refresh-token`, { refreshToken });
         const { accessToken, refreshToken: newRefreshToken } = res.data.data;
         
         // Save new tokens

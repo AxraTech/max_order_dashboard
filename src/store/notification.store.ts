@@ -84,9 +84,11 @@ export const useNotificationStore = create<NotificationStore>((set, get) => ({
 
     const token = localStorage.getItem('maxorder_access_token');
     
-    const socketUrl = window.location.origin.includes('localhost') || window.location.hostname.match(/^127\.\d+\.\d+\.\d+$/) || window.location.hostname.match(/^192\.168\./)
-      ? `${window.location.protocol}//${window.location.hostname}:4000`
-      : window.location.origin;
+    const socketUrl = import.meta.env.VITE_SOCKET_URL || (
+      window.location.origin.includes('localhost') || window.location.hostname.match(/^127\.\d+\.\d+\.\d+$/) || window.location.hostname.match(/^192\.168\./)
+        ? `${window.location.protocol}//${window.location.hostname}:4000`
+        : window.location.origin
+    );
       
     console.log('Connecting to socket server at:', socketUrl);
 
