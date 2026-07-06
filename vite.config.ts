@@ -19,6 +19,9 @@ export default defineConfig({
       },
     },
   },
+  preview: {
+    allowedHosts: true,
+  },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
