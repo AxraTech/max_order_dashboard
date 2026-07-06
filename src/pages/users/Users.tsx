@@ -2,7 +2,8 @@ import React, { useCallback, useEffect, useState } from 'react';
 import {
   Button, Card, Form, Input, message, Modal, Popconfirm, Select, Space, Switch, Table, Tag, Typography,
 } from 'antd';
-import { EditOutlined, PlusOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, EditOutlined, PlusOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons';
+import { useNavigate } from 'react-router-dom';
 import { api } from '../../services/api';
 
 const { Title, Text } = Typography;
@@ -32,6 +33,7 @@ interface BranchRecord {
 }
 
 export const Users: React.FC = () => {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [users, setUsers] = useState<UserRecord[]>([]);
   const [roles, setRoles] = useState<RoleRecord[]>([]);
@@ -136,10 +138,17 @@ export const Users: React.FC = () => {
   return (
     <div className="animate-fade-in">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-        <div>
-          <Title level={2} style={{ margin: 0, fontWeight: 700 }}>Admin Users</Title>
-          <Text type="secondary">Manage admin accounts, roles, passwords, and branch assignments</Text>
-        </div>
+        <Space size={16} align="center">
+          <Button 
+            icon={<ArrowLeftOutlined />} 
+            onClick={() => navigate(-1)} 
+            style={{ borderRadius: '12px', width: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center' }} 
+          />
+          <div>
+            <Title level={2} style={{ margin: 0, fontWeight: 700 }}>Admin Users</Title>
+            <Text type="secondary">Manage admin accounts, roles, passwords, and branch assignments</Text>
+          </div>
+        </Space>
         <Space>
           <Button icon={<ReloadOutlined />} onClick={fetchUsers}>Refresh</Button>
           <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>New Admin User</Button>

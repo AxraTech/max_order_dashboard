@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { Card, Col, Row, Statistic, Tag, Typography } from 'antd';
+import { Button, Card, Col, Row, Space, Statistic, Tag, Typography } from 'antd';
 import { useNavigate } from 'react-router-dom';
-import { AuditOutlined, BranchesOutlined, SafetyCertificateOutlined, TeamOutlined, UserOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, AuditOutlined, BranchesOutlined, SafetyCertificateOutlined, TeamOutlined, UserOutlined } from '@ant-design/icons';
 import { api } from '../../services/api';
 
 const { Title, Text } = Typography;
@@ -66,11 +66,18 @@ export const Administration: React.FC = () => {
 
   return (
     <div className="animate-fade-in">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24, gap: 16, flexWrap: 'wrap' }}>
-        <div>
-          <Title level={2} style={{ margin: 0, fontWeight: 700 }}>Administration</Title>
-          <Text type="secondary">System control, branch admins, roles, and audit visibility</Text>
-        </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, gap: 16, flexWrap: 'wrap' }}>
+        <Space size={16} align="center">
+          <Button 
+            icon={<ArrowLeftOutlined />} 
+            onClick={() => navigate('/dashboard')} 
+            style={{ borderRadius: '12px', width: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center' }} 
+          />
+          <div>
+            <Title level={2} style={{ margin: 0, fontWeight: 700 }}>Administration</Title>
+            <Text type="secondary">System control, branch admins, roles, and audit visibility</Text>
+          </div>
+        </Space>
         <Tag color="blue" icon={<SafetyCertificateOutlined />} style={{ padding: '6px 10px', borderRadius: 10, fontWeight: 700 }}>
           RBAC Enabled
         </Tag>

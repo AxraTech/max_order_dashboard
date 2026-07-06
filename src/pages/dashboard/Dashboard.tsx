@@ -397,7 +397,7 @@ export const Dashboard: React.FC = () => {
               ]}
             />
             <div style={{ marginTop: '16px' }}>
-              <a style={{ color: '#3B82F6', fontWeight: 500 }}>View all orders →</a>
+              <a onClick={() => navigate('/orders')} style={{ color: '#3B82F6', fontWeight: 500, cursor: 'pointer' }}>View all orders →</a>
             </div>
           </Card>
         </Col>
@@ -455,7 +455,7 @@ export const Dashboard: React.FC = () => {
               ))}
             </div>
             <div style={{ marginTop: '16px' }}>
-              <a style={{ color: '#3B82F6', fontWeight: 500, fontSize: '13px' }}>View role details →</a>
+              <a onClick={() => navigate('/roles')} style={{ color: '#3B82F6', fontWeight: 500, fontSize: '13px', cursor: 'pointer' }}>View role details →</a>
             </div>
           </Card>
         </Col>
@@ -477,7 +477,7 @@ export const Dashboard: React.FC = () => {
               ]}
             />
             <div style={{ marginTop: '16px' }}>
-              <a style={{ color: '#3B82F6', fontWeight: 500 }}>View all →</a>
+              <a onClick={() => navigate('/inventory')} style={{ color: '#3B82F6', fontWeight: 500, cursor: 'pointer' }}>View all →</a>
             </div>
           </Card>
         </Col>
@@ -496,7 +496,7 @@ export const Dashboard: React.FC = () => {
               ]}
             />
             <div style={{ marginTop: '16px' }}>
-              <a style={{ color: '#3B82F6', fontWeight: 500 }}>View all →</a>
+              <a onClick={() => navigate('/orders')} style={{ color: '#3B82F6', fontWeight: 500, cursor: 'pointer' }}>View all →</a>
             </div>
           </Card>
         </Col>

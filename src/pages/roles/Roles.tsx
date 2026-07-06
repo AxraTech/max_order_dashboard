@@ -2,7 +2,8 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Button, Card, Checkbox, Collapse, Form, Input, message, Modal, Popconfirm, Select, Space, Table, Tag, Typography,
 } from 'antd';
-import { DeleteOutlined, EditOutlined, KeyOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, DeleteOutlined, EditOutlined, KeyOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons';
+import { useNavigate } from 'react-router-dom';
 import { api } from '../../services/api';
 
 const { Title, Text } = Typography;
@@ -32,6 +33,7 @@ interface RoleRecord {
 const ACTION_ORDER = ['CREATE', 'READ', 'UPDATE', 'DELETE', 'APPROVE', 'EXPORT'];
 
 export const Roles: React.FC = () => {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [roles, setRoles] = useState<RoleRecord[]>([]);
   const [permissions, setPermissions] = useState<PermissionRecord[]>([]);
@@ -143,10 +145,17 @@ export const Roles: React.FC = () => {
   return (
     <div className="animate-fade-in">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-        <div>
-          <Title level={2} style={{ margin: 0, fontWeight: 700 }}>Roles & Access</Title>
-          <Text type="secondary">Create roles, assign permissions, and control RBAC scopes</Text>
-        </div>
+        <Space size={16} align="center">
+          <Button 
+            icon={<ArrowLeftOutlined />} 
+            onClick={() => navigate(-1)} 
+            style={{ borderRadius: '12px', width: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center' }} 
+          />
+          <div>
+            <Title level={2} style={{ margin: 0, fontWeight: 700 }}>Roles & Access</Title>
+            <Text type="secondary">Create roles, assign permissions, and control RBAC scopes</Text>
+          </div>
+        </Space>
         <Space>
           <Button icon={<ReloadOutlined />} onClick={fetchData}>Refresh</Button>
           <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>New Role</Button>

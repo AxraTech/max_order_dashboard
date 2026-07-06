@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Button, Card, Input, message, Select, Space, Table, Tag, Typography } from 'antd';
-import { ReloadOutlined, SearchOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons';
+import { useNavigate } from 'react-router-dom';
 import { api } from '../../services/api';
 
 const { Title, Text } = Typography;
@@ -22,6 +23,7 @@ interface AuditRecord {
 }
 
 export const AuditLogs: React.FC = () => {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [items, setItems] = useState<AuditRecord[]>([]);
   const [total, setTotal] = useState(0);
@@ -59,10 +61,17 @@ export const AuditLogs: React.FC = () => {
   return (
     <div className="animate-fade-in">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-        <div>
-          <Title level={2} style={{ margin: 0, fontWeight: 700 }}>Audit Logs</Title>
-          <Text type="secondary">Track user actions, module changes, and transaction history</Text>
-        </div>
+        <Space size={16} align="center">
+          <Button 
+            icon={<ArrowLeftOutlined />} 
+            onClick={() => navigate(-1)} 
+            style={{ borderRadius: '12px', width: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center' }} 
+          />
+          <div>
+            <Title level={2} style={{ margin: 0, fontWeight: 700 }}>Audit Logs</Title>
+            <Text type="secondary">Track user actions, module changes, and transaction history</Text>
+          </div>
+        </Space>
         <Button icon={<ReloadOutlined />} onClick={fetchData}>Refresh</Button>
       </div>
 
