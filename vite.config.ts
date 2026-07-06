@@ -12,11 +12,23 @@ export default defineConfig({
         target: 'http://localhost:4000',
         changeOrigin: true,
       },
+      '/socket.io': {
+        target: 'http://localhost:4000',
+        ws: true,
+        changeOrigin: true,
+      },
     },
   },
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, './src')
+      '@': path.resolve(__dirname, './src'),
+      // xlsx-js-style tries to access stream.Readable in browser — stub it out
+      stream: path.resolve(__dirname, './src/utils/stream-stub.ts'),
     },
   },
+  define: {
+    // Required for some CJS-style packages that reference global
+    global: 'globalThis',
+  },
 });
+

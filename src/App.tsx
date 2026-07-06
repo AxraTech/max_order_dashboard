@@ -32,6 +32,7 @@ import { Dealers } from './pages/dealers/Dealers';
 import { PurchaseOrders } from './pages/purchase-orders/PurchaseOrders';
 import { SalesTeams } from './pages/sales-teams/SalesTeams';
 import { Promotions } from './pages/promotions/Promotions';
+import { Settings } from './pages/settings/Settings';
 
 export const App: React.FC = () => {
   const { checkAuth } = useAuthStore();
@@ -113,6 +114,7 @@ export const App: React.FC = () => {
                 <Route path="/purchase-orders" element={<PurchaseOrders />} />
                 <Route path="/administration" element={<Administration />} />
                 <Route path="/audit-logs" element={<AuditLogs />} />
+                <Route path="/settings" element={<Settings />} />
               </Route>
             </Route>
             

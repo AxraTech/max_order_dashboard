@@ -63,7 +63,16 @@ export const Orders: React.FC = () => {
     } catch { } finally { setLoading(false); }
   }, [page, pageSize, search, statusFilter]);
 
-  useEffect(() => { fetchOrders(); }, [fetchOrders]);
+  useEffect(() => {
+    fetchOrders();
+    const handleUpdate = () => {
+      fetchOrders();
+    };
+    window.addEventListener('api-update:order', handleUpdate);
+    return () => {
+      window.removeEventListener('api-update:order', handleUpdate);
+    };
+  }, [fetchOrders]);
 
   const handleViewDetail = async (id: string) => {
     try {
@@ -77,7 +86,13 @@ export const Orders: React.FC = () => {
       setActionLoading(true);
       const res = await api.post(`/orders/${id}/transition`, { status: newStatus, reason });
       if (res.data.success) {
-        message.success(`Order ${newStatus.replace(/_/g, ' ')}`);
+        const actualStatus = res.data.data?.status || newStatus;
+        const statusText = actualStatus.replace(/_/g, ' ');
+        if (actualStatus !== newStatus) {
+          message.warning(`Order moved to ${statusText}. Check the status history for the hold reason.`);
+        } else {
+          message.success(`Order ${statusText}`);
+        }
         fetchOrders();
         if (detailOpen) { setDetailOpen(false); }
       }
@@ -155,7 +170,7 @@ export const Orders: React.FC = () => {
           <Button type="link" icon={<EyeOutlined />} onClick={() => handleViewDetail(r.id)} style={{ padding: 0 }}>
             View
           </Button>
-          {r.status === 'SUBMITTED' && (
+          {['SUBMITTED', 'PENDING'].includes(r.status) && (
             <Popconfirm
               title="Approve this order?"
               onConfirm={() => handleStatusTransition(r.id, 'APPROVED', 'Approved by admin')}
@@ -249,7 +264,7 @@ export const Orders: React.FC = () => {
         footer={
           detailOrder ? (
             <Space>
-              {detailOrder.status === 'SUBMITTED' && (
+              {['SUBMITTED', 'PENDING'].includes(detailOrder.status) && (
                 <Button
                   type="primary"
                   icon={<CheckCircleOutlined />}

@@ -30,6 +30,8 @@ import {
 import { useAuthStore } from '../../store/auth.store';
 import { useAdminBranchStore } from '../../store/branch.store';
 import { api } from '../../services/api';
+import { NotificationBell } from './NotificationBell';
+import { useNotificationStore } from '../../store/notification.store';
 
 const { Header, Sider, Content } = Layout;
 
@@ -37,8 +39,20 @@ export const AdminLayout: React.FC = () => {
   const [collapsed, setCollapsed] = useState(false);
   const { branchCount, setBranchCount } = useAdminBranchStore();
   const { user, logout } = useAuthStore();
+  const { initSocket, disconnectSocket, fetchNotifications } = useNotificationStore();
   const navigate = useNavigate();
   const location = useLocation();
+
+  // Setup sockets and fetch notifications on mount
+  useEffect(() => {
+    if (user?.id) {
+      initSocket(user.id);
+      fetchNotifications();
+    }
+    return () => {
+      disconnectSocket();
+    };
+  }, [user?.id, initSocket, disconnectSocket, fetchNotifications]);
 
   useEffect(() => {
     api.get('/branches')
@@ -127,6 +141,7 @@ export const AdminLayout: React.FC = () => {
     { key: '/masters', icon: <DatabaseOutlined />, label: 'Masters' },
     { key: '/administration', icon: <SettingOutlined />, label: 'Administration' },
     { key: '/audit-logs', icon: <FileSearchOutlined />, label: 'Audit Logs' },
+    { key: '/settings', icon: <SettingOutlined />, label: 'Settings' },
   ];
 
   // Filter sidebar tabs dynamically based on user role permissions
@@ -170,6 +185,8 @@ export const AdminLayout: React.FC = () => {
       case '/administration':
       case '/audit-logs':
         return false; // Only Admin/HQ can access
+      case '/settings':
+        return role === 'SUPER_ADMIN'; // Super Admin only
       default:
         return true;
     }
@@ -246,6 +263,7 @@ export const AdminLayout: React.FC = () => {
           />
           
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <NotificationBell />
             <div style={{ 
               display: collapsed ? 'none' : 'flex', 
               flexDirection: 'column', 

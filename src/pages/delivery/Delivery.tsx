@@ -77,7 +77,16 @@ export const Delivery: React.FC = () => {
     }
   }, [page, pageSize, status, search]);
 
-  useEffect(() => { fetchDeliveries(); }, [fetchDeliveries]);
+  useEffect(() => {
+    fetchDeliveries();
+    const handleUpdate = () => {
+      fetchDeliveries();
+    };
+    window.addEventListener('api-update:delivery', handleUpdate);
+    return () => {
+      window.removeEventListener('api-update:delivery', handleUpdate);
+    };
+  }, [fetchDeliveries]);
 
   const moveNext = async (record: DeliveryRecord) => {
     const nextStatus = NEXT_STATUS[record.status];

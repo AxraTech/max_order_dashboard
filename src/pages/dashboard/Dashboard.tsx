@@ -89,6 +89,22 @@ export const Dashboard: React.FC = () => {
     fetchDashboardData();
   }, [fetchDashboardData]);
 
+  useEffect(() => {
+    const handleUpdate = () => {
+      fetchDashboardData();
+    };
+    window.addEventListener('api-update:order', handleUpdate);
+    window.addEventListener('api-update:delivery', handleUpdate);
+    window.addEventListener('api-update:payment', handleUpdate);
+    window.addEventListener('api-update:invoice', handleUpdate);
+    return () => {
+      window.removeEventListener('api-update:order', handleUpdate);
+      window.removeEventListener('api-update:delivery', handleUpdate);
+      window.removeEventListener('api-update:payment', handleUpdate);
+      window.removeEventListener('api-update:invoice', handleUpdate);
+    };
+  }, [fetchDashboardData]);
+
   const getStatusColor = (status: string) => {
     return status === 'APPROVED' ? 'success' : status === 'COMPLETED' ? 'processing' : 'warning';
   };

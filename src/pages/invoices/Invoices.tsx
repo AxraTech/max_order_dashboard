@@ -72,7 +72,18 @@ export const Invoices: React.FC = () => {
     } catch { } finally { setLoading(false); }
   }, [page, pageSize, status, search]);
 
-  useEffect(() => { fetchInvoices(); }, [fetchInvoices]);
+  useEffect(() => {
+    fetchInvoices();
+    const handleUpdate = () => {
+      fetchInvoices();
+    };
+    window.addEventListener('api-update:invoice', handleUpdate);
+    window.addEventListener('api-update:payment', handleUpdate);
+    return () => {
+      window.removeEventListener('api-update:invoice', handleUpdate);
+      window.removeEventListener('api-update:payment', handleUpdate);
+    };
+  }, [fetchInvoices]);
 
   const loadDetail = async (id: string) => {
     try {
@@ -532,6 +543,7 @@ export const Invoices: React.FC = () => {
             <Select style={{ borderRadius: '10px' }} options={[
               { value: 'BANK_TRANSFER', label: 'Bank Transfer' },
               { value: 'CASH', label: 'Cash' },
+              { value: 'CASH_DOWN', label: 'Cash Down' },
               { value: 'CHEQUE', label: 'Cheque' },
               { value: 'MOBILE_BANKING', label: 'Mobile Banking' },
               { value: 'CREDIT_NOTE', label: 'Credit Note' },
