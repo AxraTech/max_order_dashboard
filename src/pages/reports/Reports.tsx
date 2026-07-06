@@ -378,6 +378,316 @@ export const Reports: React.FC = () => {
     message.success('Sale Detail Report exported successfully!');
   };
 
+  const handleExportDailySales = () => {
+    if (dailySales.length === 0) { message.warning('No data to export'); return; }
+
+    const branchName = selectedBranch === 'all'
+      ? 'All Branches'
+      : branches.find(b => b.id === selectedBranch)?.name || 'All Branches';
+    
+    const companyName = `MEN Company (2026 -2027) New ( ${branchName} )`;
+    const reportTitle = 'Daily Sales Performance Report';
+    const fromDate = dateRange?.[0]?.format('DD/MM/YYYY') ?? '';
+    const toDate = dateRange?.[1]?.format('DD/MM/YYYY') ?? '';
+    const period = `From ${fromDate} To ${toDate}`;
+
+    const COLS = ['Date', 'Orders Count', 'Subtotal (MMK)', 'Discount (MMK)', 'Tax (MMK)', 'Total Revenue (MMK)'];
+
+    type WsRow = (string | number | null)[];
+    const wsRows: WsRow[] = [];
+    wsRows.push([companyName, ...Array(COLS.length - 1).fill(null)]);
+    wsRows.push([reportTitle, ...Array(COLS.length - 1).fill(null)]);
+    wsRows.push([period, ...Array(COLS.length - 1).fill(null)]);
+    wsRows.push(COLS as WsRow);
+
+    dailySales.forEach((r: any) => {
+      wsRows.push([
+        r.date,
+        r.orderCount,
+        Number(r.subtotal),
+        Number(r.discount),
+        Number(r.tax),
+        Number(r.totalAmount)
+      ]);
+    });
+
+    const gOrders = dailySales.reduce((s, r) => s + r.orderCount, 0);
+    const gSub = dailySales.reduce((s, r) => s + Number(r.subtotal), 0);
+    const gDisc = dailySales.reduce((s, r) => s + Number(r.discount), 0);
+    const gTax = dailySales.reduce((s, r) => s + Number(r.tax), 0);
+    const gTotal = dailySales.reduce((s, r) => s + Number(r.totalAmount), 0);
+    wsRows.push(['Grand Total', gOrders, gSub, gDisc, gTax, gTotal]);
+
+    const ws = XLSX.utils.aoa_to_sheet(wsRows);
+    ws['!cols'] = [18, 14, 18, 18, 18, 20].map(w => ({ wch: w }));
+
+    ws['!merges'] = [
+      { s: { r: 0, c: 0 }, e: { r: 0, c: COLS.length - 1 } },
+      { s: { r: 1, c: 0 }, e: { r: 1, c: COLS.length - 1 } },
+      { s: { r: 2, c: 0 }, e: { r: 2, c: COLS.length - 1 } },
+    ];
+
+    const centerAlign = { horizontal: 'center', vertical: 'center' };
+
+    Object.keys(ws).forEach(key => {
+      if (key.startsWith('!')) return;
+      const cell = ws[key];
+      const rowNum = parseInt(key.replace(/^[A-Z]+/, ''), 10);
+
+      if (rowNum === 1) {
+        cell.s = { font: { bold: true, sz: 14, name: 'Calibri' }, alignment: centerAlign };
+      } else if (rowNum === 2) {
+        cell.s = { font: { bold: true, sz: 12, name: 'Calibri' }, alignment: centerAlign };
+      } else if (rowNum === 3) {
+        cell.s = { font: { sz: 10, italic: true, name: 'Calibri' }, alignment: centerAlign };
+      } else if (rowNum === 4) {
+        cell.s = {
+          font: { bold: true, sz: 10, name: 'Calibri' },
+          alignment: centerAlign,
+          fill: { fgColor: { rgb: 'EAEAEA' } },
+          border: {
+            top: { style: 'thin', color: { rgb: 'CCCCCC' } }, bottom: { style: 'thin', color: { rgb: 'CCCCCC' } },
+            left: { style: 'thin', color: { rgb: 'CCCCCC' } }, right: { style: 'thin', color: { rgb: 'CCCCCC' } }
+          }
+        };
+      } else {
+        const firstCellInRow = ws[`A${rowNum}`];
+        const val = firstCellInRow ? String(firstCellInRow.v || '') : '';
+
+        if (val === 'Grand Total') {
+          cell.s = {
+            font: { bold: true, sz: 10, name: 'Calibri' },
+            fill: { fgColor: { rgb: 'F5F3FF' } }
+          };
+        } else {
+          const colLetter = key.replace(/[0-9]+/, '');
+          const rightAlignCols = ['B', 'C', 'D', 'E', 'F'];
+          cell.s = {
+            font: { sz: 9.5, name: 'Calibri' },
+            alignment: rightAlignCols.includes(colLetter) ? { horizontal: 'right' } : undefined
+          };
+        }
+      }
+    });
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Daily_Sales');
+    XLSX.writeFile(wb, `Daily_Sales_${fromDate}_${toDate}.xlsx`);
+    message.success('Daily Sales Report exported successfully!');
+  };
+
+  const handleExportSystemSales = () => {
+    if (systemSales.length === 0) { message.warning('No data to export'); return; }
+
+    const branchName = selectedBranch === 'all'
+      ? 'All Branches'
+      : branches.find(b => b.id === selectedBranch)?.name || 'All Branches';
+    
+    const companyName = `MEN Company (2026 -2027) New ( ${branchName} )`;
+    const reportTitle = 'System Sales Report (All Orders)';
+    const fromDate = dateRange?.[0]?.format('DD/MM/YYYY') ?? '';
+    const toDate = dateRange?.[1]?.format('DD/MM/YYYY') ?? '';
+    const period = `From ${fromDate} To ${toDate}`;
+
+    const COLS = [
+      'Order No.', 'Order Date', 'Customer Code', 'Customer Name',
+      'Sales Rep / MSR', 'Branch', 'Status', 'Subtotal (MMK)',
+      'Tax (MMK)', 'Discount (MMK)', 'Total Amount (MMK)'
+    ];
+
+    type WsRow = (string | number | null)[];
+    const wsRows: WsRow[] = [];
+    wsRows.push([companyName, ...Array(COLS.length - 1).fill(null)]);
+    wsRows.push([reportTitle, ...Array(COLS.length - 1).fill(null)]);
+    wsRows.push([period, ...Array(COLS.length - 1).fill(null)]);
+    wsRows.push(COLS as WsRow);
+
+    systemSales.forEach((r: any) => {
+      wsRows.push([
+        r.orderNumber,
+        dayjs(r.orderDate).format('YYYY-MM-DD HH:mm'),
+        r.customerCode,
+        r.customerName,
+        r.salesRepName,
+        r.branchName,
+        r.status.replace(/_/g, ' '),
+        Number(r.subtotal),
+        Number(r.tax),
+        Number(r.discount),
+        Number(r.totalAmount)
+      ]);
+    });
+
+    const gSub = systemSales.reduce((s, r) => s + Number(r.subtotal), 0);
+    const gTax = systemSales.reduce((s, r) => s + Number(r.tax), 0);
+    const gDisc = systemSales.reduce((s, r) => s + Number(r.discount), 0);
+    const gTotal = systemSales.reduce((s, r) => s + Number(r.totalAmount), 0);
+    wsRows.push([
+      'Grand Total', null, null, null, null, null, null,
+      gSub, gTax, gDisc, gTotal
+    ]);
+
+    const ws = XLSX.utils.aoa_to_sheet(wsRows);
+    ws['!cols'] = [14, 18, 14, 25, 20, 16, 14, 18, 16, 16, 18].map(w => ({ wch: w }));
+
+    ws['!merges'] = [
+      { s: { r: 0, c: 0 }, e: { r: 0, c: COLS.length - 1 } },
+      { s: { r: 1, c: 0 }, e: { r: 1, c: COLS.length - 1 } },
+      { s: { r: 2, c: 0 }, e: { r: 2, c: COLS.length - 1 } },
+    ];
+
+    const centerAlign = { horizontal: 'center', vertical: 'center' };
+
+    Object.keys(ws).forEach(key => {
+      if (key.startsWith('!')) return;
+      const cell = ws[key];
+      const rowNum = parseInt(key.replace(/^[A-Z]+/, ''), 10);
+
+      if (rowNum === 1) {
+        cell.s = { font: { bold: true, sz: 14, name: 'Calibri' }, alignment: centerAlign };
+      } else if (rowNum === 2) {
+        cell.s = { font: { bold: true, sz: 12, name: 'Calibri' }, alignment: centerAlign };
+      } else if (rowNum === 3) {
+        cell.s = { font: { sz: 10, italic: true, name: 'Calibri' }, alignment: centerAlign };
+      } else if (rowNum === 4) {
+        cell.s = {
+          font: { bold: true, sz: 10, name: 'Calibri' },
+          alignment: centerAlign,
+          fill: { fgColor: { rgb: 'EAEAEA' } },
+          border: {
+            top: { style: 'thin', color: { rgb: 'CCCCCC' } }, bottom: { style: 'thin', color: { rgb: 'CCCCCC' } },
+            left: { style: 'thin', color: { rgb: 'CCCCCC' } }, right: { style: 'thin', color: { rgb: 'CCCCCC' } }
+          }
+        };
+      } else {
+        const firstCellInRow = ws[`A${rowNum}`];
+        const val = firstCellInRow ? String(firstCellInRow.v || '') : '';
+
+        if (val === 'Grand Total') {
+          cell.s = {
+            font: { bold: true, sz: 10, name: 'Calibri' },
+            fill: { fgColor: { rgb: 'F5F3FF' } }
+          };
+        } else {
+          const colLetter = key.replace(/[0-9]+/, '');
+          const rightAlignCols = ['H', 'I', 'J', 'K'];
+          cell.s = {
+            font: { sz: 9.5, name: 'Calibri' },
+            alignment: rightAlignCols.includes(colLetter) ? { horizontal: 'right' } : undefined
+          };
+        }
+      }
+    });
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'System_Sales');
+    XLSX.writeFile(wb, `System_Sales_${fromDate}_${toDate}.xlsx`);
+    message.success('System Sales Report exported successfully!');
+  };
+
+  const handleExportItemSales = () => {
+    if (itemSales.length === 0) { message.warning('No data to export'); return; }
+
+    const branchName = selectedBranch === 'all'
+      ? 'All Branches'
+      : branches.find(b => b.id === selectedBranch)?.name || 'All Branches';
+    
+    const companyName = `MEN Company (2026 -2027) New ( ${branchName} )`;
+    const reportTitle = 'Item Sales Report (Products Performance)';
+    const fromDate = dateRange?.[0]?.format('DD/MM/YYYY') ?? '';
+    const toDate = dateRange?.[1]?.format('DD/MM/YYYY') ?? '';
+    const period = `From ${fromDate} To ${toDate}`;
+
+    const COLS = [
+      'Product Code', 'SKU', 'Product Name', 'Category',
+      'Quantity Sold', 'UOM', 'Total Discounts Given (MMK)', 'Total Revenue (MMK)'
+    ];
+
+    type WsRow = (string | number | null)[];
+    const wsRows: WsRow[] = [];
+    wsRows.push([companyName, ...Array(COLS.length - 1).fill(null)]);
+    wsRows.push([reportTitle, ...Array(COLS.length - 1).fill(null)]);
+    wsRows.push([period, ...Array(COLS.length - 1).fill(null)]);
+    wsRows.push(COLS as WsRow);
+
+    itemSales.forEach((r: any) => {
+      wsRows.push([
+        r.productCode,
+        r.sku,
+        r.productName,
+        r.categoryName,
+        Number(r.quantitySold),
+        r.uom,
+        Number(r.totalDiscount),
+        Number(r.totalRevenue)
+      ]);
+    });
+
+    const gQty = itemSales.reduce((s, r) => s + Number(r.quantitySold), 0);
+    const gDisc = itemSales.reduce((s, r) => s + Number(r.totalDiscount), 0);
+    const gTotal = itemSales.reduce((s, r) => s + Number(r.totalRevenue), 0);
+    wsRows.push([
+      'Grand Total', null, null, null, gQty, null, gDisc, gTotal
+    ]);
+
+    const ws = XLSX.utils.aoa_to_sheet(wsRows);
+    ws['!cols'] = [16, 14, 25, 18, 14, 10, 25, 20].map(w => ({ wch: w }));
+
+    ws['!merges'] = [
+      { s: { r: 0, c: 0 }, e: { r: 0, c: COLS.length - 1 } },
+      { s: { r: 1, c: 0 }, e: { r: 1, c: COLS.length - 1 } },
+      { s: { r: 2, c: 0 }, e: { r: 2, c: COLS.length - 1 } },
+    ];
+
+    const centerAlign = { horizontal: 'center', vertical: 'center' };
+
+    Object.keys(ws).forEach(key => {
+      if (key.startsWith('!')) return;
+      const cell = ws[key];
+      const rowNum = parseInt(key.replace(/^[A-Z]+/, ''), 10);
+
+      if (rowNum === 1) {
+        cell.s = { font: { bold: true, sz: 14, name: 'Calibri' }, alignment: centerAlign };
+      } else if (rowNum === 2) {
+        cell.s = { font: { bold: true, sz: 12, name: 'Calibri' }, alignment: centerAlign };
+      } else if (rowNum === 3) {
+        cell.s = { font: { sz: 10, italic: true, name: 'Calibri' }, alignment: centerAlign };
+      } else if (rowNum === 4) {
+        cell.s = {
+          font: { bold: true, sz: 10, name: 'Calibri' },
+          alignment: centerAlign,
+          fill: { fgColor: { rgb: 'EAEAEA' } },
+          border: {
+            top: { style: 'thin', color: { rgb: 'CCCCCC' } }, bottom: { style: 'thin', color: { rgb: 'CCCCCC' } },
+            left: { style: 'thin', color: { rgb: 'CCCCCC' } }, right: { style: 'thin', color: { rgb: 'CCCCCC' } }
+          }
+        };
+      } else {
+        const firstCellInRow = ws[`A${rowNum}`];
+        const val = firstCellInRow ? String(firstCellInRow.v || '') : '';
+
+        if (val === 'Grand Total') {
+          cell.s = {
+            font: { bold: true, sz: 10, name: 'Calibri' },
+            fill: { fgColor: { rgb: 'F5F3FF' } }
+          };
+        } else {
+          const colLetter = key.replace(/[0-9]+/, '');
+          const rightAlignCols = ['E', 'G', 'H'];
+          cell.s = {
+            font: { sz: 9.5, name: 'Calibri' },
+            alignment: rightAlignCols.includes(colLetter) ? { horizontal: 'right' } : undefined
+          };
+        }
+      }
+    });
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Item_Sales');
+    XLSX.writeFile(wb, `Item_Sales_${fromDate}_${toDate}.xlsx`);
+    message.success('Item Sales Report exported successfully!');
+  };
+
   return (
     <div className="animate-fade-in" style={{ paddingBottom: '24px' }}>
       {/* Header */}
@@ -594,8 +904,22 @@ export const Reports: React.FC = () => {
                   </Col>
                 </Row>
 
-                {/* Data Table */}
-                <Card className="glass-card" variant="borderless" styles={{ body: { padding: 0 } }}>
+                <Card
+                  className="glass-card"
+                  variant="borderless"
+                  title={<span style={{ fontWeight: 700 }}>Daily Sales Records</span>}
+                  extra={
+                    <Button
+                      type="primary"
+                      icon={<DownloadOutlined />}
+                      onClick={handleExportDailySales}
+                      style={{ background: 'linear-gradient(135deg,#8B5CF6,#6366F1)', border: 'none', borderRadius: 10 }}
+                    >
+                      Export Excel
+                    </Button>
+                  }
+                  styles={{ body: { padding: 0 } }}
+                >
                   <Table
                     dataSource={dailySales.map((item, idx) => ({ ...item, key: idx }))}
                     pagination={{ pageSize: 10, showSizeChanger: true }}
@@ -737,8 +1061,22 @@ export const Reports: React.FC = () => {
                   </Col>
                 </Row>
 
-                {/* Table */}
-                <Card className="glass-card" variant="borderless" styles={{ body: { padding: 0 } }}>
+                <Card
+                  className="glass-card"
+                  variant="borderless"
+                  title={<span style={{ fontWeight: 700 }}>System Sales Order Records</span>}
+                  extra={
+                    <Button
+                      type="primary"
+                      icon={<DownloadOutlined />}
+                      onClick={handleExportSystemSales}
+                      style={{ background: 'linear-gradient(135deg,#8B5CF6,#6366F1)', border: 'none', borderRadius: 10 }}
+                    >
+                      Export Excel
+                    </Button>
+                  }
+                  styles={{ body: { padding: 0 } }}
+                >
                   <Table
                     dataSource={systemSales}
                     pagination={{ pageSize: 10, showSizeChanger: true }}
@@ -855,8 +1193,22 @@ export const Reports: React.FC = () => {
                   </Col>
                 </Row>
 
-                {/* Table */}
-                <Card className="glass-card" variant="borderless" styles={{ body: { padding: 0 } }}>
+                <Card
+                  className="glass-card"
+                  variant="borderless"
+                  title={<span style={{ fontWeight: 700 }}>Product Sales Performance</span>}
+                  extra={
+                    <Button
+                      type="primary"
+                      icon={<DownloadOutlined />}
+                      onClick={handleExportItemSales}
+                      style={{ background: 'linear-gradient(135deg,#8B5CF6,#6366F1)', border: 'none', borderRadius: 10 }}
+                    >
+                      Export Excel
+                    </Button>
+                  }
+                  styles={{ body: { padding: 0 } }}
+                >
                   <Table
                     dataSource={itemSales.map((item, idx) => ({ ...item, key: idx }))}
                     pagination={{ pageSize: 10, showSizeChanger: true }}

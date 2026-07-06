@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Card, Typography, Table, Tag, Input, Select, Space, Row, Col, Tooltip, Button, Modal, Form, InputNumber, Switch, message, Popconfirm } from 'antd';
-import { SearchOutlined, SafetyCertificateOutlined, ExperimentOutlined, PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import { SearchOutlined, SafetyCertificateOutlined, ExperimentOutlined, PlusOutlined, EditOutlined, DeleteOutlined, DownloadOutlined } from '@ant-design/icons';
+import * as XLSX from 'xlsx-js-style';
 import { api } from '../../services/api';
 import { CURRENCY } from '../../types/index';
 import { useAuthStore } from '../../store/auth.store';
@@ -28,6 +29,7 @@ interface ProductItem {
   isControlled: boolean;
   storageConditions: string | null;
   category: CategoryInfo;
+  team: string | null;
   expiryAlertThreshold: number;
 }
 
@@ -43,27 +45,57 @@ export const Products: React.FC = () => {
   const [editingProduct, setEditingProduct] = useState<ProductItem | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [form] = Form.useForm();
-  const [wiping, setWiping] = useState(false);
-
-  const handleWipeProducts = async () => {
+  const handleExportProducts = async () => {
     try {
-      setWiping(true);
-      const res = await api.delete('/products/clear');
-      if (res.data.success) {
-        message.success('All product records and transaction history successfully wiped!');
-        fetchProducts();
+      message.loading({ content: 'Exporting products...', key: 'exportProducts' });
+      const res = await api.get('/products', {
+        params: {
+          page: 1,
+          limit: 5000,
+          search: search || undefined,
+          categoryId: selectedCategory === 'all' ? undefined : selectedCategory,
+          team: selectedTeam === 'all' ? undefined : selectedTeam,
+        },
+      });
+      if (!res.data.success || res.data.data.length === 0) {
+        message.warning({ content: 'No products to export', key: 'exportProducts' });
+        return;
       }
-    } catch (err: any) {
-      console.error('Wipe failed:', err);
-      message.error(err.response?.data?.message || 'Failed to wipe products data');
-    } finally {
-      setWiping(false);
+      
+      const list = res.data.data;
+      const data = list.map((p: any) => ({
+        'Product Code': p.code,
+        'SKU': p.sku,
+        'Product Name': p.name,
+        'Brand Name': p.brandName || '—',
+        'Generic Name': p.genericName || '—',
+        'Category': p.category.name,
+        'Team': p.team || '—',
+        'Dosage Form': p.dosageForm || '—',
+        'Selling Price (MMK)': Number(p.sellingPrice),
+        'Dealer Price (MMK)': Number(p.dealerPrice),
+        'Base Price (MMK)': Number(p.basePrice),
+        'Unit (UOM)': p.uom,
+        'Storage Conditions': p.storageConditions || '—',
+        'Scheduled Drug': p.isScheduled ? 'Yes' : 'No',
+        'Controlled Drug': p.isControlled ? 'Yes' : 'No',
+      }));
+      
+      const ws = XLSX.utils.json_to_sheet(data);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Products');
+      XLSX.writeFile(wb, 'Product_List.xlsx');
+      message.success({ content: 'Products exported successfully!', key: 'exportProducts' });
+    } catch (err) {
+      console.error('Export failed:', err);
+      message.error({ content: 'Failed to export products', key: 'exportProducts' });
     }
   };
 
   // Filters
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [selectedTeam, setSelectedTeam] = useState<string>('all');
   
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -76,7 +108,7 @@ export const Products: React.FC = () => {
 
   useEffect(() => {
     fetchProducts();
-  }, [search, selectedCategory, currentPage, pageSize]);
+  }, [search, selectedCategory, selectedTeam, currentPage, pageSize]);
 
   const fetchCategories = async () => {
     try {
@@ -98,6 +130,7 @@ export const Products: React.FC = () => {
           limit: pageSize,
           search: search || undefined,
           categoryId: selectedCategory === 'all' ? undefined : selectedCategory,
+          team: selectedTeam === 'all' ? undefined : selectedTeam,
         },
       });
       if (res.data.success) {
@@ -147,6 +180,7 @@ export const Products: React.FC = () => {
       brandName: record.brandName,
       genericName: record.genericName,
       categoryId: record.category.id,
+      team: record.team || null,
       dosageForm: record.dosageForm,
       basePrice: record.basePrice,
       sellingPrice: record.sellingPrice,
@@ -199,11 +233,11 @@ export const Products: React.FC = () => {
       ),
     },
     {
-      title: 'Category & Form',
-      key: 'category_form',
+      title: 'Category',
+      key: 'category',
       render: (_: any, record: ProductItem) => (
         <Space orientation="vertical" size={2}>
-          <Tag color="purple" style={{ border: 'none', borderRadius: '8px', margin: 0 }}>
+          <Tag color="blue" style={{ border: 'none', borderRadius: '8px', margin: 0 }}>
             {record.category.name}
           </Tag>
           {record.dosageForm && (
@@ -212,6 +246,17 @@ export const Products: React.FC = () => {
             </Text>
           )}
         </Space>
+      ),
+    },
+    {
+      title: 'Team',
+      key: 'team',
+      render: (_: any, record: ProductItem) => (
+        record.team ? (
+          <Tag color="purple" style={{ border: 'none', borderRadius: '8px', margin: 0 }}>
+            {record.team}
+          </Tag>
+        ) : <Text type="secondary">—</Text>
       ),
     },
     ...(isSuperAdmin ? [{
@@ -306,22 +351,13 @@ export const Products: React.FC = () => {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
         <Title level={2} style={{ margin: 0, fontWeight: 700 }}>Product Catalog</Title>
         <Space>
-          <Popconfirm
-            title="Wipe All Products?"
-            description="Warning: This will delete all products, category-relations, stock balances, batches, orders, and invoices. This cannot be undone."
-            onConfirm={handleWipeProducts}
-            okText="Yes, Wipe"
-            cancelText="Cancel"
-            okButtonProps={{ danger: true, loading: wiping }}
+          <Button
+            icon={<DownloadOutlined />}
+            onClick={handleExportProducts}
+            style={{ borderRadius: '12px' }}
           >
-            <Button
-              danger
-              icon={<DeleteOutlined />}
-              style={{ borderRadius: '12px' }}
-            >
-              Wipe Products
-            </Button>
-          </Popconfirm>
+            Export Excel
+          </Button>
           <Button 
             type="primary" 
             icon={<PlusOutlined />} 
@@ -334,9 +370,9 @@ export const Products: React.FC = () => {
       </div>
 
       {/* Filters */}
-      <Card className="glass-card" variant="borderless" style={{ marginBottom: '20px' }}>
-        <Row gutter={[16, 16]} align="middle">
-          <Col xs={24} sm={12} md={8}>
+      <Card className="glass-card" variant="borderless">
+        <Row gutter={[16, 16]} style={{ marginBottom: '24px' }}>
+          <Col xs={24} md={12}>
             <Input
               placeholder="Search by code, SKU, name, brand or generic..."
               prefix={<SearchOutlined style={{ color: 'var(--text-secondary)' }} />}
@@ -349,7 +385,7 @@ export const Products: React.FC = () => {
               allowClear
             />
           </Col>
-          <Col xs={24} sm={12} md={6}>
+          <Col xs={12} sm={6} md={6}>
             <Select
               style={{ width: '100%', borderRadius: '12px' }}
               value={selectedCategory}
@@ -364,6 +400,24 @@ export const Products: React.FC = () => {
                   {cat.name}
                 </Select.Option>
               ))}
+            </Select>
+          </Col>
+          <Col xs={12} sm={6} md={6}>
+            <Select
+              style={{ width: '100%', borderRadius: '12px' }}
+              value={selectedTeam}
+              onChange={(val) => {
+                setSelectedTeam(val);
+                setCurrentPage(1);
+              }}
+            >
+              <Select.Option value="all">All Teams</Select.Option>
+              {['CPD', 'G1', 'G2', 'G3', 'HOVID', 'PC'].map((t) => (
+                <Select.Option key={t} value={t}>
+                  {t}
+                </Select.Option>
+              ))}
+              <Select.Option value="none">No Team</Select.Option>
             </Select>
           </Col>
         </Row>
@@ -467,9 +521,24 @@ export const Products: React.FC = () => {
             </Col>
             <Col span={12}>
               <Form.Item
+                name="team"
+                label="Sales Team / Division"
+                rules={[{ required: true, message: 'Please select a team!' }]}
+              >
+                <Select placeholder="Select team" style={{ borderRadius: '8px' }} allowClear>
+                  {['CPD', 'G1', 'G2', 'G3', 'HOVID', 'PC'].map(t => (
+                    <Select.Option key={t} value={t}>{t}</Select.Option>
+                  ))}
+                </Select>
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
                 name="dosageForm"
-                label="Dosage Form"
-                rules={[{ required: true, message: 'Please input dosage form!' }]}
+                label="Dosage Form (Optional)"
               >
                 <Input placeholder="e.g. Tablet, Capsule, Gel" style={{ borderRadius: '8px' }} />
               </Form.Item>

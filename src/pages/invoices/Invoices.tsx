@@ -31,7 +31,7 @@ interface InvoiceItem {
 }
 interface PaymentRecord {
   id: string; amount: number; paymentDate: string; paymentMethod: string;
-  reference?: string | null; notes?: string | null;
+  reference?: string | null; notes?: string | null; discount?: number;
 }
 interface InvoiceRecord {
   id: string; invoiceNumber: string; status: string;
@@ -490,6 +490,7 @@ export const Invoices: React.FC = () => {
                       { title: 'Date', dataIndex: 'paymentDate', render: (d: string) => dayjs(d).format('DD MMM YYYY') },
                       { title: 'Method', dataIndex: 'paymentMethod', render: (m: string) => m.replace(/_/g, ' ') },
                       { title: 'Reference', dataIndex: 'reference', render: (v: string) => v || '—' },
+                      { title: 'Discount', dataIndex: 'discount', render: (v: number) => v > 0 ? <Text style={{ color: '#F59E0B' }}>{Number(v).toLocaleString()} {CURRENCY.symbol}</Text> : '—' },
                       { title: 'Amount', dataIndex: 'amount', render: (v: number) => <Text strong style={{ color: '#10B981' }}>{Number(v).toLocaleString()} {CURRENCY.symbol}</Text> },
                     ]}
                   />

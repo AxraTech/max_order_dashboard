@@ -99,23 +99,7 @@ export const Inventory: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [importing, setImporting] = useState(false);
-  const [wiping, setWiping] = useState(false);
 
-  const handleWipeInventory = async () => {
-    try {
-      setWiping(true);
-      const res = await api.delete('/inventory/clear');
-      if (res.data.success) {
-        message.success('All inventory data successfully wiped!');
-        fetchStocks();
-      }
-    } catch (err: any) {
-      console.error('Wipe failed:', err);
-      message.error(err.response?.data?.message || 'Failed to wipe inventory data');
-    } finally {
-      setWiping(false);
-    }
-  };
 
   const handleImportExcel = async (file: any) => {
     try {
@@ -197,6 +181,7 @@ export const Inventory: React.FC = () => {
               'UOM': item.product.uom,
               'Batch Number': batch.batchNumber,
               'Expiry Date': expiry.toLocaleDateString(),
+              'Team': batch.categoryDescription || '—',
               'Physical Qty': batch.quantity,
               'Block Qty': batch.reservedQty,
               'Returned Qty': batch.returnedQty || 0,
@@ -216,6 +201,7 @@ export const Inventory: React.FC = () => {
             'UOM': item.product.uom,
             'Batch Number': '-',
             'Expiry Date': '-',
+            'Team': '—',
             'Physical Qty': item.quantity,
             'Block Qty': item.reservedQty,
             'Returned Qty': item.returnedQty || 0,
@@ -264,7 +250,7 @@ export const Inventory: React.FC = () => {
       doc.text(`Generated on: ${new Date().toLocaleString()} | Total Items: ${allStocks.length}`, 14, 22);
       
       const tableColumn = [
-        'No', 'Code', 'SKU', 'Product Name', 'UOM', 'Batch No', 'Expiry Date', 'Physical Qty', 'Block Qty', 'Returned Qty', 'Available Qty', 'Warehouse', 'Status'
+        'No', 'Code', 'SKU', 'Product Name', 'UOM', 'Batch No', 'Expiry Date', 'Team', 'Physical Qty', 'Block Qty', 'Returned Qty', 'Available Qty', 'Warehouse', 'Status'
       ];
       
       const tableRows: any[] = [];
@@ -288,6 +274,7 @@ export const Inventory: React.FC = () => {
               item.product.uom,
               batch.batchNumber,
               expiry.toLocaleDateString(),
+              batch.categoryDescription || '—',
               batch.quantity,
               batch.reservedQty,
               batch.returnedQty || 0,
@@ -307,6 +294,7 @@ export const Inventory: React.FC = () => {
             item.product.uom,
             '-',
             '-',
+            '—',
             item.quantity,
             item.reservedQty,
             item.returnedQty || 0,
@@ -328,16 +316,17 @@ export const Inventory: React.FC = () => {
           0: { cellWidth: 10 },
           1: { cellWidth: 20 },
           2: { cellWidth: 20 },
-          3: { cellWidth: 40 },
+          3: { cellWidth: 35 },
           4: { cellWidth: 12 },
-          5: { cellWidth: 35 },
+          5: { cellWidth: 25 },
           6: { cellWidth: 20 },
           7: { cellWidth: 18 },
-          8: { cellWidth: 16 },
-          9: { cellWidth: 18 },
+          8: { cellWidth: 18 },
+          9: { cellWidth: 16 },
           10: { cellWidth: 18 },
-          11: { cellWidth: 35 },
-          12: { cellWidth: 20 }
+          11: { cellWidth: 18 },
+          12: { cellWidth: 30 },
+          13: { cellWidth: 20 }
         }
       });
       
@@ -573,7 +562,7 @@ export const Inventory: React.FC = () => {
         render: (dateStr: string | null) => dateStr ? new Date(dateStr).toLocaleDateString() : <Text type="secondary">-</Text>,
       },
       {
-        title: 'Category Desc',
+        title: 'Team',
         dataIndex: 'categoryDescription',
         key: 'categoryDescription',
         render: (val: string | null) => val ? <Tag color="blue" style={{ border: 'none', borderRadius: '8px' }}>{val}</Tag> : <Text type="secondary">-</Text>,
@@ -802,22 +791,7 @@ export const Inventory: React.FC = () => {
               Import Excel
             </Button>
           </Upload>
-          <Popconfirm
-            title="Wipe All Inventory?"
-            description="Are you sure you want to delete all stocks, batches, and movements? This cannot be undone."
-            onConfirm={handleWipeInventory}
-            okText="Yes, Wipe"
-            cancelText="Cancel"
-            okButtonProps={{ danger: true, loading: wiping }}
-          >
-            <Button
-              danger
-              icon={<DeleteOutlined />}
-              style={{ borderRadius: '12px' }}
-            >
-              Wipe Inventory
-            </Button>
-          </Popconfirm>
+
           <Button
             type="primary"
             icon={<PlusOutlined />}
@@ -1022,7 +996,7 @@ export const Inventory: React.FC = () => {
 
           <Row gutter={16}>
             <Col span={12}>
-              <Form.Item name="categoryDescription" label="Category Description">
+              <Form.Item name="categoryDescription" label="Team">
                 <Select
                   showSearch
                   allowClear
@@ -1150,7 +1124,7 @@ export const Inventory: React.FC = () => {
 
           <Row gutter={16}>
             <Col span={12}>
-              <Form.Item name="categoryDescription" label="Category Description">
+              <Form.Item name="categoryDescription" label="Team">
                 <Select
                   showSearch
                   allowClear
