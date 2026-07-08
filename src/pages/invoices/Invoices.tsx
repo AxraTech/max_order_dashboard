@@ -39,7 +39,7 @@ interface InvoiceRecord {
   subtotal: number; tax: number; discount: number; totalAmount: number;
   paidAmount: number; balanceDue: number;
   notes?: string | null;
-  customer: { id: string; code: string; name: string; phone?: string; address?: string; creditLimit?: any };
+  customer: { id: string; code: string; name: string; phone?: string; address?: string; township?: string; creditLimit?: any };
   order?: { id: string; orderNumber: string; status: string; branch?: { id: string; name: string; code: string } };
   items?: InvoiceItem[];
   payments?: PaymentRecord[];
@@ -145,6 +145,7 @@ export const Invoices: React.FC = () => {
       render: (_: any, r: InvoiceRecord) => (
         <div>
           <Text strong style={{ fontSize: '13px' }}>{r.customer?.name}</Text>
+          {r.customer?.township && <Text type="secondary" style={{ fontSize: '12px' }}> ({r.customer.township})</Text>}
           <br /><Text type="secondary" style={{ fontSize: '11px' }}>{r.customer?.code}</Text>
         </div>
       ),
@@ -387,8 +388,16 @@ export const Invoices: React.FC = () => {
                     <Text strong style={{ fontSize: '11px', textTransform: 'uppercase', color: '#6b7280' }}>Bill To</Text>
                     <div style={{ marginTop: 4 }}>
                       <Text strong style={{ fontSize: '15px' }}>{detail.customer?.name}</Text>
-                      {detail.customer?.phone && <><br /><Text style={{ fontSize: '13px' }}>{detail.customer.phone}</Text></>}
-                      {detail.customer?.address && <><br /><Text style={{ fontSize: '12px' }} type="secondary">{detail.customer.address}</Text></>}
+                      {detail.customer?.phone && <><br /><Text style={{ fontSize: '13px' }}>Phone: {detail.customer.phone}</Text></>}
+                      {(detail.customer?.address || detail.customer?.township) && (
+                        <>
+                          <br />
+                          <Text style={{ fontSize: '12px' }} type="secondary">
+                            {detail.customer.address}
+                            {detail.customer.township && `, ${detail.customer.township}`}
+                          </Text>
+                        </>
+                      )}
                     </div>
                   </Col>
                   <Col span={12}>
@@ -417,7 +426,7 @@ export const Invoices: React.FC = () => {
                 style={{ marginBottom: 20 }}
                 columns={[
                   { title: '#', width: 40, render: (_: any, __: any, idx: number) => <Text type="secondary">{idx + 1}</Text> },
-                  { title: 'Product', dataIndex: 'productName', key: 'productName', render: (v: string) => <Text strong>{v}</Text> },
+                  { title: 'Product', key: 'product', render: (_: any, r: any) => <Text strong>{r.productName || r.description || '—'}</Text> },
                   { title: 'Qty', dataIndex: 'quantity', key: 'quantity', width: 60 },
                   { title: 'Unit Price', dataIndex: 'unitPrice', key: 'unitPrice', width: 110, render: (v: number) => `${Number(v).toLocaleString()} ${CURRENCY.symbol}` },
                   { title: 'Total', dataIndex: 'totalPrice', key: 'totalPrice', width: 120, render: (v: number) => <Text strong>{Number(v).toLocaleString()} {CURRENCY.symbol}</Text> },

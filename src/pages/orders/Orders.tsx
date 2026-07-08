@@ -27,6 +27,10 @@ interface OrderRecord {
   id: string; orderNumber: string; status: OrderStatus;
   orderDate: string; totalAmount: number; subtotal: number; tax: number;
   discount: number; notes: string | null;
+  paymentAmount?: number | null;
+  paymentMethod?: string | null;
+  paymentReference?: string | null;
+  paymentNotes?: string | null;
   branch: { name: string; code: string };
   customer: { name: string; code: string };
   salesRep: { code: string; user: { firstName: string; lastName: string } };
@@ -308,6 +312,16 @@ export const Orders: React.FC = () => {
               <Descriptions.Item label="Status">
                 <Tag color={STATUS_COLOR[detailOrder.status]}>{detailOrder.status.replace(/_/g, ' ')}</Tag>
               </Descriptions.Item>
+              {detailOrder.paymentAmount && (
+                <Descriptions.Item label="Recorded Payment" span={2}>
+                  <Text strong style={{ color: '#10B981' }}>
+                    {Number(detailOrder.paymentAmount).toLocaleString()} {CURRENCY.symbol}
+                  </Text>
+                  {detailOrder.paymentMethod && <Text type="secondary"> ({detailOrder.paymentMethod.replace(/_/g, ' ')})</Text>}
+                  {detailOrder.paymentReference && <Text type="secondary"> · Ref: {detailOrder.paymentReference}</Text>}
+                  {detailOrder.paymentNotes && <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '2px' }}>Notes: {detailOrder.paymentNotes}</div>}
+                </Descriptions.Item>
+              )}
               {detailOrder.notes && <Descriptions.Item label="Notes" span={2}>{detailOrder.notes}</Descriptions.Item>}
             </Descriptions>
 

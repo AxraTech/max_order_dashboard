@@ -6,7 +6,7 @@ import { playNotificationSound } from '../utils/audio';
 export interface Notification {
   id: string;
   userId: string;
-  type: 'ORDER' | 'INVENTORY' | 'CREDIT' | 'SYSTEM' | 'DELIVERY' | 'PAYMENT' | 'INVOICE';
+  type: 'ORDER' | 'INVENTORY' | 'CREDIT' | 'SYSTEM' | 'DELIVERY' | 'PAYMENT' | 'INVOICE' | 'CUSTOMER';
   title: string;
   message: string;
   isRead: boolean;
@@ -126,6 +126,10 @@ export const useNotificationStore = create<NotificationStore>((set, get) => ({
 
     socketInstance.on('invoice_updated', (data) => {
       window.dispatchEvent(new CustomEvent('api-update:invoice', { detail: data }));
+    });
+
+    socketInstance.on('customer_updated', (data) => {
+      window.dispatchEvent(new CustomEvent('api-update:customer', { detail: data }));
     });
 
     set({ socket: socketInstance });

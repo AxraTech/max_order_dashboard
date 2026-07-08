@@ -23,6 +23,8 @@ export const NotificationBell: React.FC = () => {
       navigate('/delivery');
     } else if (noti.referenceType === 'INVOICE') {
       navigate('/invoices');
+    } else if (noti.referenceType === 'CUSTOMER') {
+      navigate('/customers');
     }
   };
 
@@ -33,6 +35,7 @@ export const NotificationBell: React.FC = () => {
       case 'PAYMENT': return 'success';
       case 'INVOICE': return 'magenta';
       case 'INVENTORY': return 'orange';
+      case 'CUSTOMER': return 'gold';
       default: return 'default';
     }
   };

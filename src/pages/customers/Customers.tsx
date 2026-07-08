@@ -57,6 +57,7 @@ interface CustomerRecord {
   channel: string | null;
   paymentTermDays: number;
   isActive: boolean;
+  township: string | null;
   territory: TerritoryInfo | null;
   branch: BranchInfo | null;
   creditLimit: CreditLimitInfo | null;
@@ -144,6 +145,16 @@ export const Customers: React.FC = () => {
   }, [currentPage, pageSize, search, categoryFilter, branchFilter, territoryFilter, activeFilter]);
 
   useEffect(() => { fetchCustomers(); }, [fetchCustomers]);
+  
+  useEffect(() => {
+    const handleUpdate = () => {
+      fetchCustomers();
+    };
+    window.addEventListener('api-update:customer', handleUpdate);
+    return () => {
+      window.removeEventListener('api-update:customer', handleUpdate);
+    };
+  }, [fetchCustomers]);
 
   // ---- Create / Edit ----
   const openCreateModal = () => {
@@ -170,6 +181,7 @@ export const Customers: React.FC = () => {
       email: record.email,
       address: record.address,
       city: record.city,
+      township: record.township,
       category: record.category,
       channel: record.channel,
       paymentTermDays: record.paymentTermDays,
@@ -277,6 +289,13 @@ export const Customers: React.FC = () => {
           )}
         </Space>
       ),
+    },
+    {
+      title: 'Township',
+      dataIndex: 'township',
+      key: 'township',
+      width: 120,
+      render: (tw: string | null) => tw || <Text type="secondary">—</Text>,
     },
     {
       title: 'Channel',
@@ -586,12 +605,17 @@ export const Customers: React.FC = () => {
           )}
 
           <Row gutter={16}>
-            <Col span={12}>
+            <Col span={8}>
               <Form.Item name="city" label="City">
                 <Input placeholder="e.g. Yangon" style={{ borderRadius: '8px' }} />
               </Form.Item>
             </Col>
-            <Col span={12}>
+            <Col span={8}>
+              <Form.Item name="township" label="Township">
+                <Input placeholder="e.g. Kamayut" style={{ borderRadius: '8px' }} />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
               <Form.Item name="address" label="Address">
                 <Input placeholder="Full address" style={{ borderRadius: '8px' }} />
               </Form.Item>
@@ -725,6 +749,7 @@ export const Customers: React.FC = () => {
               <Descriptions.Item label="Phone">{detailCustomer.phone || '—'}</Descriptions.Item>
               <Descriptions.Item label="Email">{detailCustomer.email || '—'}</Descriptions.Item>
               <Descriptions.Item label="City">{detailCustomer.city || '—'}</Descriptions.Item>
+              <Descriptions.Item label="Township">{detailCustomer.township || '—'}</Descriptions.Item>
               <Descriptions.Item label="Payment Terms">{detailCustomer.paymentTermDays} days</Descriptions.Item>
               <Descriptions.Item label="Address" span={2}>{detailCustomer.address || '—'}</Descriptions.Item>
               <Descriptions.Item label="Status">
