@@ -39,6 +39,8 @@ interface DeliveryRecord {
     items: Array<{
       id: string;
       quantity: number;
+      focQty?: number;
+      sampleQty?: number;
       batchNumber?: string | null;
       product: { sku: string; name: string };
     }>;
@@ -187,16 +189,61 @@ export const Delivery: React.FC = () => {
               <Descriptions.Item label="Delivered At">{detail.deliveredAt ? new Date(detail.deliveredAt).toLocaleString() : '-'}</Descriptions.Item>
               <Descriptions.Item label="Notes">{detail.notes || '-'}</Descriptions.Item>
             </Descriptions>
-            <Table
-              size="small"
-              pagination={false}
-              dataSource={detail.order.items.map((i) => ({ ...i, key: i.id }))}
-              columns={[
-                { title: 'Product', render: (_, r) => <div><Text strong>{r.product.name}</Text><br /><Text type="secondary">{r.product.sku}</Text></div> },
-                { title: 'Qty', dataIndex: 'quantity', width: 80 },
-                { title: 'Batch', dataIndex: 'batchNumber', render: (v) => v || '-' },
-              ]}
-            />
+            {(() => {
+              const splitDeliveryItems: any[] = [];
+              if (detail?.order?.items) {
+                detail.order.items.forEach((item: any) => {
+                  if (item.quantity > 0) {
+                    splitDeliveryItems.push({
+                      key: `${item.id}-charge`,
+                      name: item.product.name,
+                      sku: item.product.sku,
+                      qty: item.quantity,
+                      type: 'Charge',
+                      batchNumber: item.batchNumber,
+                    });
+                  }
+                  if (item.focQty && item.focQty > 0) {
+                    splitDeliveryItems.push({
+                      key: `${item.id}-foc`,
+                      name: item.product.name,
+                      sku: item.product.sku,
+                      qty: item.focQty,
+                      type: 'FOC',
+                      batchNumber: item.batchNumber,
+                    });
+                  }
+                  if (item.sampleQty && item.sampleQty > 0) {
+                    splitDeliveryItems.push({
+                      key: `${item.id}-sample`,
+                      name: item.product.name,
+                      sku: item.product.sku,
+                      qty: item.sampleQty,
+                      type: 'Sample',
+                      batchNumber: item.batchNumber,
+                    });
+                  }
+                });
+              }
+
+              return (
+                <Table
+                  size="small"
+                  pagination={false}
+                  dataSource={splitDeliveryItems}
+                  columns={[
+                    { title: 'Product', render: (_, r) => <div><Text strong>{r.name}</Text><br /><Text type="secondary">{r.sku}</Text></div> },
+                    { title: 'Type', dataIndex: 'type', key: 'type', width: 90, render: (t: string) => (
+                      <Tag color={t === 'Charge' ? 'blue' : t === 'FOC' ? 'pink' : 'purple'} style={{ border: 'none', borderRadius: '6px', fontWeight: 600 }}>
+                        {t}
+                      </Tag>
+                    )},
+                    { title: 'Qty', dataIndex: 'qty', width: 80 },
+                    { title: 'Batch', dataIndex: 'batchNumber', render: (v) => v || '-' },
+                  ]}
+                />
+              );
+            })()}
           </>
         )}
       </Modal>

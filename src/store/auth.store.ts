@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { UserProfile, LoginRequest } from '../types/index';
+import { updateCurrencySymbol } from '../types/index';
 import { api } from '../services/api';
 
 interface AuthState {
@@ -24,8 +25,12 @@ export const useAuthStore = create<AuthState>((set) => ({
       const response = await api.post('/auth/login', credentials);
       const { user, accessToken, refreshToken } = response.data.data;
       
-      localStorage.setItem('maxorder_access_token', accessToken);
-      localStorage.setItem('maxorder_refresh_token', refreshToken);
+      sessionStorage.setItem('maxorder_access_token', accessToken);
+      sessionStorage.setItem('maxorder_refresh_token', refreshToken);
+      
+      if (user.currencySymbol) {
+        updateCurrencySymbol(user.currencySymbol);
+      }
       
       set({ user, isAuthenticated: true, isLoading: false });
     } catch (error: any) {
@@ -43,8 +48,8 @@ export const useAuthStore = create<AuthState>((set) => ({
     } catch (e) {
       console.error('Logout request failed', e);
     } finally {
-      localStorage.removeItem('maxorder_access_token');
-      localStorage.removeItem('maxorder_refresh_token');
+      sessionStorage.removeItem('maxorder_access_token');
+      sessionStorage.removeItem('maxorder_refresh_token');
       set({ user: null, isAuthenticated: false });
     }
   },
@@ -52,17 +57,23 @@ export const useAuthStore = create<AuthState>((set) => ({
   checkAuth: async () => {
     set({ isLoading: true });
     try {
-      const token = localStorage.getItem('maxorder_access_token');
+      const token = sessionStorage.getItem('maxorder_access_token');
       if (!token) {
         set({ user: null, isAuthenticated: false, isLoading: false });
         return;
       }
       
       const response = await api.get('/auth/profile');
-      set({ user: response.data.data, isAuthenticated: true, isLoading: false });
+      const user = response.data.data;
+      
+      if (user.currencySymbol) {
+        updateCurrencySymbol(user.currencySymbol);
+      }
+      
+      set({ user, isAuthenticated: true, isLoading: false });
     } catch (error) {
-      localStorage.removeItem('maxorder_access_token');
-      localStorage.removeItem('maxorder_refresh_token');
+      sessionStorage.removeItem('maxorder_access_token');
+      sessionStorage.removeItem('maxorder_refresh_token');
       set({ user: null, isAuthenticated: false, isLoading: false });
     }
   },

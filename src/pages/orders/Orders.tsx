@@ -21,12 +21,17 @@ const STATUS_COLOR: Record<string, string> = {
 
 interface OrderItem {
   id: string; quantity: number; unitPrice: number; totalPrice: number;
+  focQty?: number;
+  sampleQty?: number;
+  promoQty?: number;
   product: { name: string; sku: string };
 }
 interface OrderRecord {
   id: string; orderNumber: string; status: OrderStatus;
   orderDate: string; totalAmount: number; subtotal: number; tax: number;
   discount: number; notes: string | null;
+  manualDiscount?: number | null;
+  cashback?: number | null;
   paymentAmount?: number | null;
   paymentMethod?: string | null;
   paymentReference?: string | null;
@@ -163,7 +168,7 @@ export const Orders: React.FC = () => {
       dataIndex: 'totalAmount',
       key: 'totalAmount',
       width: 130,
-      render: (amt: number) => <Text strong style={{ color: 'var(--primary-color)' }}>{Number(amt).toLocaleString()} {CURRENCY.symbol}</Text>,
+      render: (amt: number) => <Text strong style={{ color: 'var(--primary-color)' }}>{Math.round(Number(amt)).toLocaleString()} {CURRENCY.symbol}</Text>,
     },
     {
       title: 'Actions',
@@ -302,11 +307,26 @@ export const Orders: React.FC = () => {
                 {detailOrder.salesRep ? `${detailOrder.salesRep.user?.firstName} ${detailOrder.salesRep.user?.lastName}` : '—'}
               </Descriptions.Item>
               <Descriptions.Item label="Date">{new Date(detailOrder.orderDate).toLocaleString()}</Descriptions.Item>
-              <Descriptions.Item label="Subtotal">{Number(detailOrder.subtotal).toLocaleString()} {CURRENCY.symbol}</Descriptions.Item>
-              <Descriptions.Item label="Discount">{Number(detailOrder.discount).toLocaleString()} {CURRENCY.symbol}</Descriptions.Item>
+              <Descriptions.Item label="Subtotal">{Math.round(Number(detailOrder.subtotal)).toLocaleString()} {CURRENCY.symbol}</Descriptions.Item>
+              {Number(detailOrder.discount) - Number(detailOrder.manualDiscount || 0) > 0 && (
+                <Descriptions.Item label="Promo Discount">
+                  -{Math.round(Number(detailOrder.discount) - Number(detailOrder.manualDiscount || 0)).toLocaleString()} {CURRENCY.symbol}
+                </Descriptions.Item>
+              )}
+              {Number(detailOrder.manualDiscount || 0) > 0 && (
+                <Descriptions.Item label="Manual Discount">
+                  -{Math.round(Number(detailOrder.manualDiscount)).toLocaleString()} {CURRENCY.symbol}
+                </Descriptions.Item>
+              )}
+              <Descriptions.Item label="Tax">{Math.round(Number(detailOrder.tax)).toLocaleString()} {CURRENCY.symbol}</Descriptions.Item>
+              {Number(detailOrder.cashback || 0) > 0 && (
+                <Descriptions.Item label="Cashback">
+                  -{Math.round(Number(detailOrder.cashback)).toLocaleString()} {CURRENCY.symbol}
+                </Descriptions.Item>
+              )}
               <Descriptions.Item label="Total">
                 <strong style={{ color: 'var(--primary-color)', fontSize: '16px' }}>
-                  {Number(detailOrder.totalAmount).toLocaleString()} {CURRENCY.symbol}
+                  {Math.round(Number(detailOrder.totalAmount)).toLocaleString()} {CURRENCY.symbol}
                 </strong>
               </Descriptions.Item>
               <Descriptions.Item label="Status">
@@ -326,17 +346,77 @@ export const Orders: React.FC = () => {
             </Descriptions>
 
             <Title level={5} style={{ marginBottom: '10px' }}>Order Items</Title>
-            <Table
-              size="small"
-              dataSource={detailOrder.items.map((i) => ({ ...i, key: i.id }))}
-              columns={[
-                { title: 'Product', key: 'product', render: (_a: any, r: OrderItem) => <div><Text strong>{r.product.name}</Text><br/><Text type="secondary" style={{fontSize:'11px'}}>SKU: {r.product.sku}</Text></div> },
-                { title: 'Qty', dataIndex: 'quantity', key: 'quantity', width: 60 },
-                { title: 'Unit Price', dataIndex: 'unitPrice', key: 'unitPrice', width: 110, render: (v: number) => `${Number(v).toLocaleString()} ${CURRENCY.symbol}` },
-                { title: 'Total', dataIndex: 'totalPrice', key: 'totalPrice', width: 120, render: (v: number) => <Text strong>{Number(v).toLocaleString()} {CURRENCY.symbol}</Text> },
-              ]}
-              pagination={false} style={{ marginBottom: '20px' }}
-            />
+            {(() => {
+              const splitItems: any[] = [];
+              if (detailOrder?.items) {
+                detailOrder.items.forEach((item: any) => {
+                  const chargeQty = item.quantity - (item.promoQty || 0);
+                  if (chargeQty > 0) {
+                    splitItems.push({
+                      key: `${item.id}-charge`,
+                      name: item.product.name,
+                      sku: item.product.sku,
+                      qty: chargeQty,
+                      type: 'Charge',
+                      unitPrice: item.unitPrice,
+                      totalPrice: item.totalPrice,
+                    });
+                  }
+                  if (item.promoQty && item.promoQty > 0) {
+                    splitItems.push({
+                      key: `${item.id}-promo`,
+                      name: item.product.name,
+                      sku: item.product.sku,
+                      qty: item.promoQty,
+                      type: 'Promo',
+                      unitPrice: 0,
+                      totalPrice: 0,
+                    });
+                  }
+                  if (item.focQty && item.focQty > 0) {
+                    splitItems.push({
+                      key: `${item.id}-foc`,
+                      name: item.product.name,
+                      sku: item.product.sku,
+                      qty: item.focQty,
+                      type: 'FOC',
+                      unitPrice: 0,
+                      totalPrice: 0,
+                    });
+                  }
+                  if (item.sampleQty && item.sampleQty > 0) {
+                    splitItems.push({
+                      key: `${item.id}-sample`,
+                      name: item.product.name,
+                      sku: item.product.sku,
+                      qty: item.sampleQty,
+                      type: 'Sample',
+                      unitPrice: 0,
+                      totalPrice: 0,
+                    });
+                  }
+                });
+              }
+
+              return (
+                <Table
+                  size="small"
+                  dataSource={splitItems}
+                  columns={[
+                    { title: 'Product', key: 'product', render: (_a: any, r: any) => <div><Text strong>{r.name}</Text><br/><Text type="secondary" style={{fontSize:'11px'}}>SKU: {r.sku}</Text></div> },
+                    { title: 'Type', dataIndex: 'type', key: 'type', width: 90, render: (t: string) => (
+                      <Tag color={t === 'Charge' ? 'blue' : t === 'Promo' ? 'green' : t === 'FOC' ? 'pink' : 'purple'} style={{ border: 'none', borderRadius: '6px', fontWeight: 600 }}>
+                        {t === 'Promo' ? 'Promo Free' : t}
+                      </Tag>
+                    )},
+                    { title: 'Qty', dataIndex: 'qty', key: 'qty', width: 80, render: (v: number) => <Text>{v}</Text> },
+                    { title: 'Unit Price', dataIndex: 'unitPrice', key: 'unitPrice', width: 110, render: (v: number) => `${Math.round(Number(v)).toLocaleString()} ${CURRENCY.symbol}` },
+                    { title: 'Total', dataIndex: 'totalPrice', key: 'totalPrice', width: 120, render: (v: number) => <Text strong>{Math.round(Number(v)).toLocaleString()} {CURRENCY.symbol}</Text> },
+                  ]}
+                  pagination={false} style={{ marginBottom: '20px' }}
+                />
+              );
+            })()}
 
             {detailOrder.statusHistory?.length > 0 && (
               <>

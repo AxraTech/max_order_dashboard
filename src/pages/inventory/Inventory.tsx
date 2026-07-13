@@ -16,6 +16,8 @@ interface BatchInfo {
   quantity: number;
   reservedQty: number;
   returnedQty: number;
+  sampleQty: number;
+  focQty: number;
   costPrice: number;
   categoryDescription?: string | null;
   damageStock: number;
@@ -32,6 +34,8 @@ interface StockItem {
   reservedQty: number;
   damagedQty: number;
   returnedQty: number;
+  sampleQty: number;
+  focQty: number;
   reorderLevel: number;
   safetyStock: number;
   minStockLevel: number;
@@ -185,6 +189,8 @@ export const Inventory: React.FC = () => {
               'Physical Qty': batch.quantity,
               'Block Qty': batch.reservedQty,
               'Returned Qty': batch.returnedQty || 0,
+              'Sample Qty': batch.sampleQty || 0,
+              'FOC Qty': batch.focQty || 0,
               'Available Qty': available,
               'Warehouse': item.warehouse.name,
               'Branch': item.warehouse.branch.name,
@@ -205,6 +211,8 @@ export const Inventory: React.FC = () => {
             'Physical Qty': item.quantity,
             'Block Qty': item.reservedQty,
             'Returned Qty': item.returnedQty || 0,
+            'Sample Qty': item.sampleQty || 0,
+            'FOC Qty': item.focQty || 0,
             'Available Qty': available,
             'Warehouse': item.warehouse.name,
             'Branch': item.warehouse.branch.name,
@@ -250,7 +258,7 @@ export const Inventory: React.FC = () => {
       doc.text(`Generated on: ${new Date().toLocaleString()} | Total Items: ${allStocks.length}`, 14, 22);
       
       const tableColumn = [
-        'No', 'Code', 'SKU', 'Product Name', 'UOM', 'Batch No', 'Expiry Date', 'Team', 'Physical Qty', 'Block Qty', 'Returned Qty', 'Available Qty', 'Warehouse', 'Status'
+        'No', 'Code', 'SKU', 'Product Name', 'UOM', 'Batch No', 'Expiry Date', 'Team', 'Physical Qty', 'Block Qty', 'Returned Qty', 'Sample Qty', 'FOC Qty', 'Available Qty', 'Warehouse', 'Status'
       ];
       
       const tableRows: any[] = [];
@@ -278,6 +286,8 @@ export const Inventory: React.FC = () => {
               batch.quantity,
               batch.reservedQty,
               batch.returnedQty || 0,
+              batch.sampleQty || 0,
+              batch.focQty || 0,
               available,
               `${item.warehouse.name} (${item.warehouse.branch.name.replace(' Branch', '')})`,
               status
@@ -298,6 +308,8 @@ export const Inventory: React.FC = () => {
             item.quantity,
             item.reservedQty,
             item.returnedQty || 0,
+            item.sampleQty || 0,
+            item.focQty || 0,
             available,
             `${item.warehouse.name} (${item.warehouse.branch.name.replace(' Branch', '')})`,
             status
@@ -313,20 +325,22 @@ export const Inventory: React.FC = () => {
         headStyles: { fillColor: [79, 70, 229] },
         styles: { fontSize: 8 },
         columnStyles: {
-          0: { cellWidth: 10 },
-          1: { cellWidth: 20 },
-          2: { cellWidth: 20 },
-          3: { cellWidth: 35 },
-          4: { cellWidth: 12 },
-          5: { cellWidth: 25 },
-          6: { cellWidth: 20 },
-          7: { cellWidth: 18 },
-          8: { cellWidth: 18 },
-          9: { cellWidth: 16 },
-          10: { cellWidth: 18 },
-          11: { cellWidth: 18 },
-          12: { cellWidth: 30 },
-          13: { cellWidth: 20 }
+          0: { cellWidth: 8 },
+          1: { cellWidth: 15 },
+          2: { cellWidth: 15 },
+          3: { cellWidth: 30 },
+          4: { cellWidth: 10 },
+          5: { cellWidth: 20 },
+          6: { cellWidth: 15 },
+          7: { cellWidth: 12 },
+          8: { cellWidth: 12 },
+          9: { cellWidth: 12 },
+          10: { cellWidth: 12 },
+          11: { cellWidth: 12 },
+          12: { cellWidth: 12 },
+          13: { cellWidth: 12 },
+          14: { cellWidth: 25 },
+          15: { cellWidth: 15 }
         }
       });
       
@@ -392,6 +406,8 @@ export const Inventory: React.FC = () => {
       manufacturingDate: batch.manufacturingDate ? dayjs(batch.manufacturingDate) : null,
       categoryDescription: batch.categoryDescription,
       damageStock: batch.damageStock ?? 0,
+      sampleQty: batch.sampleQty ?? 0,
+      focQty: batch.focQty ?? 0,
       notes: batch.notes,
       expiryAlertThreshold: batch.expiryAlertThreshold || 30,
     });
@@ -586,6 +602,18 @@ export const Inventory: React.FC = () => {
         render: (val: number) => <span style={{ color: val > 0 ? '#10B981' : 'inherit' }}>{val || 0}</span>,
       },
       {
+        title: 'Sample Qty',
+        dataIndex: 'sampleQty',
+        key: 'sampleQty',
+        render: (val: number) => <span style={{ color: val > 0 ? '#8B5CF6' : 'inherit' }}>{val || 0}</span>,
+      },
+      {
+        title: 'FOC Qty',
+        dataIndex: 'focQty',
+        key: 'focQty',
+        render: (val: number) => <span style={{ color: val > 0 ? '#EC4899' : 'inherit' }}>{val || 0}</span>,
+      },
+      {
         title: 'Damage Qty',
         dataIndex: 'damageStock',
         key: 'damageStock',
@@ -731,6 +759,22 @@ export const Inventory: React.FC = () => {
       key: 'returnedQty',
       render: (val: number, record: StockItem) => (
         <span style={{ color: val > 0 ? '#10B981' : 'inherit' }}>{val || 0} {record.product.uom}</span>
+      ),
+    },
+    {
+      title: 'Sample Qty',
+      dataIndex: 'sampleQty',
+      key: 'sampleQty',
+      render: (val: number, record: StockItem) => (
+        <span style={{ color: val > 0 ? '#8B5CF6' : 'inherit' }}>{val || 0} {record.product.uom}</span>
+      ),
+    },
+    {
+      title: 'FOC Qty',
+      dataIndex: 'focQty',
+      key: 'focQty',
+      render: (val: number, record: StockItem) => (
+        <span style={{ color: val > 0 ? '#EC4899' : 'inherit' }}>{val || 0} {record.product.uom}</span>
       ),
     },
     {
@@ -898,7 +942,9 @@ export const Inventory: React.FC = () => {
           initialValues={{
             expiryAlertThreshold: 30,
             quantity: 100,
-            costPrice: 0
+            costPrice: 0,
+            sampleQty: 0,
+            focQty: 0
           }}
           style={{ marginTop: '20px' }}
         >
@@ -1032,6 +1078,19 @@ export const Inventory: React.FC = () => {
             </Col>
           </Row>
 
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item name="sampleQty" label="Sample Stock (Qty)">
+                <InputNumber min={0} style={{ width: '100%', borderRadius: '8px' }} placeholder="0" />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="focQty" label="FOC Stock (Qty)">
+                <InputNumber min={0} style={{ width: '100%', borderRadius: '8px' }} placeholder="0" />
+              </Form.Item>
+            </Col>
+          </Row>
+
           <Form.Item
             name="branchIds"
             label="Branch Assignment (Inventory belongs to one or multiple branches)"
@@ -1155,6 +1214,19 @@ export const Inventory: React.FC = () => {
             </Col>
             <Col span={12}>
               <Form.Item name="damageStock" label="Damage Stock (Qty)">
+                <InputNumber min={0} style={{ width: '100%', borderRadius: '8px' }} placeholder="0" />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item name="sampleQty" label="Sample Stock (Qty)">
+                <InputNumber min={0} style={{ width: '100%', borderRadius: '8px' }} placeholder="0" />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="focQty" label="FOC Stock (Qty)">
                 <InputNumber min={0} style={{ width: '100%', borderRadius: '8px' }} placeholder="0" />
               </Form.Item>
             </Col>

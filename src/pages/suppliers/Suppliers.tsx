@@ -299,7 +299,7 @@ export const Suppliers: React.FC = () => {
         open={isModalOpen}
         onCancel={() => setIsModalOpen(false)}
         footer={null}
-        destroyOnClose
+        destroyOnHidden
         styles={{ body: { paddingTop: '12px' } }}
       >
         <Form
@@ -418,3 +418,4 @@ export const Suppliers: React.FC = () => {
     </div>
   );
 };
+

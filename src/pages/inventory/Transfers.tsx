@@ -392,7 +392,7 @@ export const Transfers: React.FC = () => {
         onCancel={() => { setRequestOpen(false); form.resetFields(); }}
         footer={null}
         width={700}
-        destroyOnClose
+        destroyOnHidden
       >
         <Form
           form={form}
@@ -555,7 +555,7 @@ export const Transfers: React.FC = () => {
           ) : null
         }
         width={720}
-        destroyOnClose
+        destroyOnHidden
       >
         {detailTransfer && (
           <>
@@ -587,3 +587,4 @@ export const Transfers: React.FC = () => {
   );
 };
 export default Transfers;
+

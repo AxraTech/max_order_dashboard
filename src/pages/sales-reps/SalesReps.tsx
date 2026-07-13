@@ -361,7 +361,7 @@ export const SalesReps: React.FC = () => {
         onCancel={() => { setIsModalOpen(false); form.resetFields(); }}
         footer={null}
         width={640}
-        destroyOnClose
+        destroyOnHidden
       >
         <Form form={form} layout="vertical" onFinish={handleSubmit} style={{ marginTop: 20 }}>
           <Row gutter={16}>
@@ -493,7 +493,7 @@ export const SalesReps: React.FC = () => {
         onCancel={() => setDetailOpen(false)}
         footer={null}
         width={600}
-        destroyOnClose
+        destroyOnHidden
       >
         {detailRecord && (
           <Space orientation="vertical" size="middle" style={{ width: '100%', marginTop: 16 }}>
@@ -548,3 +548,4 @@ export const SalesReps: React.FC = () => {
     </div>
   );
 };
+

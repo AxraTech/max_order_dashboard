@@ -13,7 +13,7 @@ export const api = axios.create({
 // Request interceptor to add auth token
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('maxorder_access_token');
+    const token = sessionStorage.getItem('maxorder_access_token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -33,7 +33,7 @@ api.interceptors.response.use(
       originalRequest._retry = true;
       
       try {
-        const refreshToken = localStorage.getItem('maxorder_refresh_token');
+        const refreshToken = sessionStorage.getItem('maxorder_refresh_token');
         if (!refreshToken) {
           throw new Error('No refresh token');
         }
@@ -43,16 +43,16 @@ api.interceptors.response.use(
         const { accessToken, refreshToken: newRefreshToken } = res.data.data;
         
         // Save new tokens
-        localStorage.setItem('maxorder_access_token', accessToken);
-        localStorage.setItem('maxorder_refresh_token', newRefreshToken);
+        sessionStorage.setItem('maxorder_access_token', accessToken);
+        sessionStorage.setItem('maxorder_refresh_token', newRefreshToken);
         
         // Retry original request with new token
         originalRequest.headers.Authorization = `Bearer ${accessToken}`;
         return api(originalRequest);
       } catch (refreshError) {
         // Refresh failed, logout user
-        localStorage.removeItem('maxorder_access_token');
-        localStorage.removeItem('maxorder_refresh_token');
+        sessionStorage.removeItem('maxorder_access_token');
+        sessionStorage.removeItem('maxorder_refresh_token');
         window.location.href = '/login';
         return Promise.reject(refreshError);
       }

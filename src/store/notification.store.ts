@@ -82,7 +82,7 @@ export const useNotificationStore = create<NotificationStore>((set, get) => ({
     const existingSocket = get().socket;
     if (existingSocket) return;
 
-    const token = localStorage.getItem('maxorder_access_token');
+    const token = sessionStorage.getItem('maxorder_access_token');
     
     const socketUrl = import.meta.env.VITE_SOCKET_URL || (
       window.location.origin.includes('localhost') || window.location.hostname.match(/^127\.\d+\.\d+\.\d+$/) || window.location.hostname.match(/^192\.168\./)

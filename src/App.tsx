@@ -28,6 +28,8 @@ import { Masters } from './pages/masters/Masters';
 import { Administration } from './pages/administration/Administration';
 import { AuditLogs } from './pages/audit-logs/AuditLogs';
 import { Suppliers } from './pages/suppliers/Suppliers';
+import { BusinessUnits } from './pages/business-units/BusinessUnits';
+import { Categories } from './pages/categories/Categories';
 import { Dealers } from './pages/dealers/Dealers';
 import { PurchaseOrders } from './pages/purchase-orders/PurchaseOrders';
 import { SalesTeams } from './pages/sales-teams/SalesTeams';
@@ -110,6 +112,8 @@ export const App: React.FC = () => {
                 <Route path="/reports" element={<Reports />} />
                 <Route path="/masters" element={<Masters />} />
                 <Route path="/suppliers" element={<Suppliers />} />
+                <Route path="/business-units" element={<BusinessUnits />} />
+                <Route path="/categories" element={<Categories />} />
                 <Route path="/dealers" element={<Dealers />} />
                 <Route path="/purchase-orders" element={<PurchaseOrders />} />
                 <Route path="/administration" element={<Administration />} />

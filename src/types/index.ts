@@ -3,7 +3,7 @@
 
 // Auth Types
 export interface LoginRequest {
-  email: string;
+  identifier: string;
   password: string;
 }
 
@@ -119,4 +119,10 @@ export const CURRENCY = {
   symbol: 'K',
   name: 'Myanmar Kyat',
   locale: 'my-MM',
-} as const;
+};
+
+export const updateCurrencySymbol = (symbol: string) => {
+  if (symbol) {
+    (CURRENCY as any).symbol = symbol;
+  }
+};

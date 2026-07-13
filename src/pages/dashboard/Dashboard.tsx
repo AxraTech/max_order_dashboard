@@ -133,9 +133,15 @@ export const Dashboard: React.FC = () => {
   }
 
   const formatCurrency = (amount: number) => {
-    if (amount >= 1000000) return `${(amount / 1000000).toFixed(2)}M`;
-    if (amount >= 1000) return `${(amount / 1000).toFixed(2)}K`;
-    return amount.toString();
+    if (amount >= 1000000) {
+      const millions = amount / 1000000;
+      return `${millions % 1 === 0 ? millions : millions.toFixed(1)}M ${CURRENCY.symbol}`;
+    }
+    if (amount >= 1000) {
+      const thousands = amount / 1000;
+      return `${thousands % 1 === 0 ? thousands : thousands.toFixed(1)}K ${CURRENCY.symbol}`;
+    }
+    return `${amount} ${CURRENCY.symbol}`;
   };
 
   const currentPeriodLabel = `${dateRange[0].format('DD MMM')} - ${dateRange[1].format('DD MMM')}`;

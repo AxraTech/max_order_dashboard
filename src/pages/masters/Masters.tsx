@@ -13,6 +13,8 @@ const items = [
   { title: 'Sales Teams', path: '/sales-teams', icon: <TeamOutlined /> },
   { title: 'Inventory', path: '/inventory', icon: <DatabaseOutlined /> },
   { title: 'Suppliers', path: '/suppliers', icon: <ContactsOutlined /> },
+  { title: 'Business Units', path: '/business-units', icon: <DatabaseOutlined /> },
+  { title: 'Product Categories', path: '/categories', icon: <ShopOutlined /> },
   { title: 'Dealers', path: '/dealers', icon: <AuditOutlined /> },
 ];
 

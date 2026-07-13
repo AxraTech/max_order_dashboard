@@ -133,6 +133,8 @@ export const AdminLayout: React.FC = () => {
     { key: '/invoices', icon: <FileTextOutlined />, label: 'Invoicing' },
     { key: '/customers', icon: <TeamOutlined />, label: 'Customers' },
     { key: '/suppliers', icon: <ContactsOutlined />, label: 'Suppliers' },
+    { key: '/business-units', icon: <DatabaseOutlined />, label: 'Business Units' },
+    { key: '/categories', icon: <ShopOutlined />, label: 'Product Categories' },
     { key: '/dealers', icon: <AuditOutlined />, label: 'Dealers' },
     { key: '/sales-reps', icon: <IdcardOutlined />, label: 'Sales Representatives' },
     { key: '/sales-teams', icon: <TeamOutlined />, label: 'Sales Teams' },
@@ -172,6 +174,8 @@ export const AdminLayout: React.FC = () => {
       case '/invoices':
       case '/customers':
       case '/suppliers':
+      case '/business-units':
+      case '/categories':
       case '/dealers':
         return ['BRANCH_MANAGER', 'FINANCE_OFFICER', 'VIEWER_AUDITOR'].includes(role);
       case '/sales-reps':

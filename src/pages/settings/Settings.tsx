@@ -106,7 +106,7 @@ export const Settings: React.FC = () => {
 
   const saveSetting = async (key: string) => {
     const value = editingValues[key];
-    if (value === undefined || String(value).trim() === '') {
+    if (value === undefined || value === null || String(value).trim() === '') {
       message.warning('Value cannot be empty');
       return;
     }
@@ -164,7 +164,7 @@ export const Settings: React.FC = () => {
             style={{ marginTop: 12, borderRadius: 10 }}
             type="warning"
             showIcon
-            message="Read-only view — only Super Admin can modify settings."
+            title="Read-only view — only Super Admin can modify settings."
           />
         )}
       </div>
@@ -231,9 +231,9 @@ export const Settings: React.FC = () => {
                           <Button disabled style={{ cursor: 'default', color: '#374151' }}>%</Button>
                         </Space.Compact>
                       ) : (
-                        <Input
+                          <Input
                           style={{ width: 130, borderRadius: 8 }}
-                          value={editingValues[key] || ''}
+                          value={editingValues[key] ?? ''}
                           onChange={e => setEditingValues(s => ({ ...s, [key]: e.target.value }))}
                           disabled={!isSuperAdmin}
                           placeholder={meta.placeholder}
@@ -281,7 +281,7 @@ export const Settings: React.FC = () => {
                   <Space>
                     <Input
                       style={{ width: 160, borderRadius: 8 }}
-                      value={editingValues[key] || ''}
+                      value={editingValues[key] ?? ''}
                       onChange={e => setEditingValues(s => ({ ...s, [key]: e.target.value }))}
                       disabled={!isSuperAdmin}
                     />

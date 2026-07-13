@@ -391,7 +391,7 @@ export const PurchaseOrders: React.FC = () => {
         onCancel={() => setIsCreateOpen(false)}
         footer={null}
         width={800}
-        destroyOnClose
+        destroyOnHidden
       >
         <Form
           form={form}
@@ -649,7 +649,7 @@ export const PurchaseOrders: React.FC = () => {
         }}
         okText="Verify & Receive Stock"
         okButtonProps={{ style: { background: '#10B981', borderColor: '#10B981' } }}
-        destroyOnClose
+        destroyOnHidden
       >
         <div style={{ paddingTop: '12px' }}>
           <Text>You are about to check in products from Purchase Order <Text code>{detailPo?.poNumber}</Text> into warehouse <Text strong>{detailPo?.warehouse.name}</Text>.</Text>
@@ -671,3 +671,4 @@ export const PurchaseOrders: React.FC = () => {
     </div>
   );
 };
+

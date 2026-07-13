@@ -60,6 +60,7 @@ export const Reports: React.FC = () => {
   const [selectedRep, setSelectedRep] = useState<string>('all');
   const [selectedCustomer, setSelectedCustomer] = useState<string>('all');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [selectedBusinessUnit, setSelectedBusinessUnit] = useState<string>('all');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
 
   // Dropdown Lists State
@@ -67,6 +68,7 @@ export const Reports: React.FC = () => {
   const [salesReps, setSalesReps] = useState<SalesRepInfo[]>([]);
   const [customers, setCustomers] = useState<CustomerInfo[]>([]);
   const [categories, setCategories] = useState<CategoryInfo[]>([]);
+  const [businessUnits, setBusinessUnits] = useState<any[]>([]);
 
   // Report Data States
   const [loading, setLoading] = useState(false);
@@ -75,6 +77,8 @@ export const Reports: React.FC = () => {
   const [systemSales, setSystemSales] = useState<any[]>([]);
   const [itemSales, setItemSales] = useState<any[]>([]);
   const [saleDetail, setSaleDetail] = useState<any[]>([]);
+  const [kpiData, setKpiData] = useState<any[]>([]);
+  // const [marketingData, setMarketingData] = useState<any>(null);
 
   // Fetch dropdown data on mount
   useEffect(() => {
@@ -100,6 +104,10 @@ export const Reports: React.FC = () => {
     api.get('/products/categories').then(res => {
       if (res.data.success) setCategories(res.data.data);
     }).catch(() => {});
+
+    api.get('/products/business-units').then(res => {
+      if (res.data.success) setBusinessUnits(res.data.data);
+    }).catch(() => {});
   }, [isBranchManager, user]);
 
   // Fetch report data based on active tab and filters
@@ -113,6 +121,7 @@ export const Reports: React.FC = () => {
         salesRepId: selectedRep !== 'all' ? selectedRep : undefined,
         customerId: selectedCustomer !== 'all' ? selectedCustomer : undefined,
         categoryId: selectedCategory !== 'all' ? selectedCategory : undefined,
+        businessUnitId: selectedBusinessUnit !== 'all' ? selectedBusinessUnit : undefined,
         status: selectedStatus !== 'all' ? selectedStatus : undefined,
       };
 
@@ -128,13 +137,22 @@ export const Reports: React.FC = () => {
       } else if (activeTab === 'sale-detail') {
         const res = await api.get('/reports/sale-detail', { params });
         if (res.data.success) setSaleDetail(res.data.data);
+      } else if (activeTab === 'kpi') {
+        const res = await api.get('/reports/sales-rep-kpi', { params });
+        if (res.data.success) setKpiData(res.data.data);
       }
+      /*
+      else if (activeTab === 'marketing') {
+        const res = await api.get('/reports/marketing', { params });
+        if (res.data.success) setMarketingData(res.data.data);
+      }
+      */
     } catch (err: any) {
       message.error(err.response?.data?.message || 'Failed to load report data');
     } finally {
       setLoading(false);
     }
-  }, [activeTab, dateRange, selectedBranch, selectedRep, selectedCustomer, selectedCategory, selectedStatus]);
+  }, [activeTab, dateRange, selectedBranch, selectedRep, selectedCustomer, selectedCategory, selectedBusinessUnit, selectedStatus]);
 
   useEffect(() => {
     fetchReportData();
@@ -147,6 +165,7 @@ export const Reports: React.FC = () => {
     setSelectedRep('all');
     setSelectedCustomer('all');
     setSelectedCategory('all');
+    setSelectedBusinessUnit('all');
     setSelectedStatus('all');
   };
 
@@ -160,24 +179,24 @@ export const Reports: React.FC = () => {
   // --- Dynamic KPIs Calculations ---
   
   const dailyKPIs = useMemo(() => {
-    const totalRevenue = dailySales.reduce((sum, item) => sum + item.totalAmount, 0);
+    const totalRevenue = Math.round(dailySales.reduce((sum, item) => sum + item.totalAmount, 0));
     const totalOrders = dailySales.reduce((sum, item) => sum + item.orderCount, 0);
-    const avgOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
-    const maxSales = dailySales.length > 0 ? Math.max(...dailySales.map(item => item.totalAmount)) : 0;
+    const avgOrderValue = totalOrders > 0 ? Math.round(totalRevenue / totalOrders) : 0;
+    const maxSales = dailySales.length > 0 ? Math.round(Math.max(...dailySales.map(item => item.totalAmount))) : 0;
     return { totalRevenue, totalOrders, avgOrderValue, maxSales };
   }, [dailySales]);
 
   const systemKPIs = useMemo(() => {
-    const totalRevenue = systemSales.reduce((sum, item) => sum + item.totalAmount, 0);
+    const totalRevenue = Math.round(systemSales.reduce((sum, item) => sum + item.totalAmount, 0));
     const totalOrders = systemSales.length;
-    const avgOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
+    const avgOrderValue = totalOrders > 0 ? Math.round(totalRevenue / totalOrders) : 0;
     const cancelledCount = systemSales.filter(item => item.status === 'CANCELLED').length;
     return { totalRevenue, totalOrders, avgOrderValue, cancelledCount };
   }, [systemSales]);
 
   const itemKPIs = useMemo(() => {
     const totalQty = itemSales.reduce((sum, item) => sum + item.quantitySold, 0);
-    const totalRev = itemSales.reduce((sum, item) => sum + item.totalRevenue, 0);
+    const totalRev = Math.round(itemSales.reduce((sum, item) => sum + item.totalRevenue, 0));
     const distinctItems = itemSales.length;
     const topItem = itemSales.length > 0 ? itemSales[0] : null; // Sorted desc in backend
     return { totalQty, totalRev, distinctItems, topItem };
@@ -807,6 +826,21 @@ export const Reports: React.FC = () => {
             </div>
           )}
 
+          {/* Business Unit Filter */}
+          <div>
+            <div style={{ fontSize: '12px', fontWeight: 600, color: '#4b5563', marginBottom: '4px' }}>Business Unit</div>
+            <Select
+              value={selectedBusinessUnit}
+              style={{ width: 180, borderRadius: '12px' }}
+              onChange={setSelectedBusinessUnit}
+            >
+              <Select.Option value="all">All Business Units</Select.Option>
+              {businessUnits.map(bu => (
+                <Select.Option key={bu.id} value={bu.id}>{bu.name}</Select.Option>
+              ))}
+            </Select>
+          </div>
+
           <div>
             <div style={{ height: '22px' }}></div>
             <Button onClick={handleResetFilters} style={{ borderRadius: '12px', height: '42px' }}>Reset</Button>
@@ -955,7 +989,7 @@ export const Reports: React.FC = () => {
                       <Statistic
                         title="Sum Total Amount"
                         value={systemKPIs.totalRevenue}
-                        precision={2}
+                        precision={0}
                         suffix={CURRENCY.symbol}
                         prefix={<DollarOutlined style={{ color: '#3B82F6' }} />}
                       />
@@ -975,7 +1009,7 @@ export const Reports: React.FC = () => {
                       <Statistic
                         title="AOV (Avg Order Value)"
                         value={systemKPIs.avgOrderValue}
-                        precision={2}
+                        precision={0}
                         suffix={CURRENCY.symbol}
                         prefix={<PercentageOutlined style={{ color: '#8B5CF6' }} />}
                       />
@@ -1217,6 +1251,7 @@ export const Reports: React.FC = () => {
                       { title: 'SKU', dataIndex: 'sku', key: 'sku' },
                       { title: 'Product Name', dataIndex: 'productName', key: 'productName', sorter: (a, b) => a.productName.localeCompare(b.productName) },
                       { title: 'Category', dataIndex: 'categoryName', key: 'categoryName' },
+                      { title: 'Business Unit', dataIndex: 'businessUnitName', key: 'businessUnitName' },
                       { title: 'Quantity Sold', dataIndex: 'quantitySold', key: 'quantitySold', sorter: (a, b) => a.quantitySold - b.quantitySold, render: (v, r) => <Text strong>{v} {r.uom}</Text> },
                       { title: 'Total Discounts Given', dataIndex: 'totalDiscount', key: 'totalDiscount', render: (v) => `${Number(v).toLocaleString()} ${CURRENCY.symbol}` },
                       { title: 'Total Revenue', dataIndex: 'totalRevenue', key: 'totalRevenue', sorter: (a, b) => a.totalRevenue - b.totalRevenue, render: (v) => <Text strong style={{ color: '#8B5CF6' }}>{Number(v).toLocaleString()} {CURRENCY.symbol}</Text> }
@@ -1344,6 +1379,8 @@ export const Reports: React.FC = () => {
                       { title: 'Remark', dataIndex: 'remark', key: 'remark', width: 120 },
                       { title: 'Category', dataIndex: 'category', key: 'category', width: 120,
                         render: (v: string) => v ? <Tag color="purple">{v}</Tag> : null },
+                      { title: 'Business Unit', dataIndex: 'businessUnit', key: 'businessUnit', width: 140,
+                        render: (v: string) => v ? <Tag color="cyan">{v}</Tag> : null },
                     ]}
                     summary={(pageData) => {
                       const sumQty = pageData.reduce((s, r) => s + r.quantity, 0);
@@ -1372,6 +1409,244 @@ export const Reports: React.FC = () => {
               </Spin>
             )
           }
+          // ================= SALES REP KPI TAB =================
+          ,{
+            key: 'kpi',
+            label: (
+              <span>
+                <StarOutlined />
+                Sales Rep KPI
+              </span>
+            ),
+            children: (
+              <Spin spinning={loading}>
+                {/* KPI Cards */}
+                <Row gutter={[16, 16]} style={{ marginBottom: '24px', display: 'flex', flexWrap: 'wrap' }}>
+                  <Col xs={24} sm={8} style={{ display: 'flex' }}>
+                    <Card className="glass-card" variant="borderless" style={{ width: '100%', height: '100%' }}>
+                      <Statistic
+                        title="Active Sales Reps"
+                        value={kpiData.length}
+                        prefix={<StarOutlined style={{ color: '#6366F1' }} />}
+                      />
+                    </Card>
+                  </Col>
+                  <Col xs={24} sm={8} style={{ display: 'flex' }}>
+                    <Card className="glass-card" variant="borderless" style={{ width: '100%', height: '100%' }}>
+                      <Statistic
+                        title="Top Performer"
+                        value={kpiData[0]?.salesRepName || 'N/A'}
+                        valueStyle={{ fontSize: '18px', fontWeight: 700 }}
+                        prefix={<DollarOutlined style={{ color: '#10B981' }} />}
+                      />
+                    </Card>
+                  </Col>
+                  <Col xs={24} sm={8} style={{ display: 'flex' }}>
+                    <Card className="glass-card" variant="borderless" style={{ width: '100%', height: '100%' }}>
+                      <Statistic
+                        title="Avg Sales / Rep"
+                        value={kpiData.length > 0 ? Math.round(kpiData.reduce((s, r) => s + r.totalSales, 0) / kpiData.length) : 0}
+                        suffix={CURRENCY.symbol}
+                        prefix={<PercentageOutlined style={{ color: '#8B5CF6' }} />}
+                      />
+                    </Card>
+                  </Col>
+                </Row>
+
+                {/* Chart & Table */}
+                <Row gutter={[16, 16]}>
+                  <Col xs={24} lg={12}>
+                    <Card title="Sales Revenue by Representative" className="glass-card" variant="borderless">
+                      <div style={{ height: 350 }}>
+                        {kpiData.length > 0 ? (
+                          <ResponsiveContainer width="100%" height={350}>
+                            <BarChart data={kpiData.slice(0, 10)} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
+                              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                              <XAxis dataKey="salesRepName" tickLine={false} tick={{ fontSize: 11, fill: '#6b7280' }} />
+                              <YAxis tickLine={false} tickFormatter={(v) => formatValue(v)} tick={{ fontSize: 11, fill: '#6b7280' }} />
+                              <Tooltip formatter={(value: any) => [`${Number(value).toLocaleString()} ${CURRENCY.symbol}`, 'Sales']} />
+                              <Bar dataKey="totalSales" fill="#6366F1" radius={[4, 4, 0, 0]} barSize={40}>
+                                {kpiData.slice(0, 10).map((_, index) => {
+                                  const colors = ['#6366F1', '#4F46E5', '#4338CA', '#3730A3', '#312E81'];
+                                  return <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />;
+                                })}
+                              </Bar>
+                            </BarChart>
+                          </ResponsiveContainer>
+                        ) : (
+                          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
+                            <Text type="secondary">No data available</Text>
+                          </div>
+                        )}
+                      </div>
+                    </Card>
+                  </Col>
+
+                  <Col xs={24} lg={12}>
+                    <Card
+                      title="Representative Rankings"
+                      className="glass-card"
+                      variant="borderless"
+                      styles={{ body: { padding: 0 } }}
+                    >
+                      <Table
+                        dataSource={kpiData.map((item, idx) => ({ ...item, key: idx, rank: idx + 1 }))}
+                        pagination={{ pageSize: 5 }}
+                        size="middle"
+                        columns={[
+                          { title: 'Rank', dataIndex: 'rank', key: 'rank', width: 60, render: (v) => <Text strong>{v}</Text> },
+                          { title: 'Name', dataIndex: 'salesRepName', key: 'salesRepName', render: (v, r) => <div><Text strong>{v}</Text><br/><Text type="secondary" style={{ fontSize: '11px' }}>{r.salesRepCode}</Text></div> },
+                          { title: 'Branch', dataIndex: 'branchName', key: 'branchName' },
+                          { title: 'Total Sales', dataIndex: 'totalSales', key: 'totalSales', render: (v) => <Text strong style={{ color: '#10B981' }}>{v.toLocaleString()} {CURRENCY.symbol}</Text>, sorter: (a, b) => a.totalSales - b.totalSales },
+                          { title: 'AOV', dataIndex: 'averageOrderValue', key: 'averageOrderValue', render: (v) => `${v.toLocaleString()} ${CURRENCY.symbol}` },
+                          { title: 'Customers', dataIndex: 'activeCustomers', key: 'activeCustomers' }
+                        ]}
+                      />
+                    </Card>
+                  </Col>
+                </Row>
+              </Spin>
+            )
+          }
+          /*
+          // ================= MARKETING & PROMO TAB =================
+          ,{
+            key: 'marketing',
+            label: (
+              <span>
+                <PercentageOutlined />
+                Marketing & Promotions
+              </span>
+            ),
+            children: (
+              <Spin spinning={loading}>
+                // Marketing Comment & Insight Card
+                <Card className="glass-card" variant="borderless" style={{ marginBottom: '24px' }}>
+                  <div style={{ padding: '4px' }}>
+                    <Text strong style={{ fontSize: '15px', color: '#4F46E5', display: 'block', marginBottom: '8px' }}>
+                      📢 Marketing & Promotions Performance Insights
+                    </Text>
+                    <Text type="secondary" style={{ display: 'block', marginBottom: '4px' }}>
+                      This report compiles and analyzes the financial efficacy of promotional activities. It automatically breaks down the total promotional investment into:
+                    </Text>
+                    <ul>
+                      <li><Text strong>Order Discounts Value:</Text> Cash/threshold discounts applied directly to overall order amounts.</li>
+                      <li><Text strong>Free Products Value:</Text> The estimated base value of products gifted to customers through "Buy X Get Y" promotions (calculated as <em>Promo Free Quantity × Product Unit Price</em>).</li>
+                      <li><Text strong>Total Promo Investment:</Text> Combined cost of both threshold discounts and gifted products, showing the exact investment made into driving sales.</li>
+                    </ul>
+                    <Text type="secondary" style={{ display: 'block', marginTop: '8px' }}>
+                      Use the segment distribution charts below to measure promotional performance across customer categories and sales channels.
+                    </Text>
+                  </div>
+                </Card>
+
+                // Marketing Spend Summary
+                <Row gutter={[16, 16]} style={{ marginBottom: '24px', display: 'flex', flexWrap: 'wrap' }}>
+                  <Col xs={24} sm={8} style={{ display: 'flex' }}>
+                    <Card className="glass-card" variant="borderless" style={{ width: '100%', height: '100%' }}>
+                      <Statistic
+                        title="Order Discounts Value"
+                        value={marketingData?.promoSummary?.totalOrderPromoDiscounts || 0}
+                        suffix={CURRENCY.symbol}
+                        valueStyle={{ color: '#8B5CF6', fontWeight: 700 }}
+                        prefix={<PercentageOutlined />}
+                      />
+                    </Card>
+                  </Col>
+                  <Col xs={24} sm={8} style={{ display: 'flex' }}>
+                    <Card className="glass-card" variant="borderless" style={{ width: '100%', height: '100%' }}>
+                      <Statistic
+                        title="Free Products Value"
+                        value={marketingData?.promoSummary?.totalFreeGiftsValue || 0}
+                        suffix={CURRENCY.symbol}
+                        valueStyle={{ color: '#F59E0B', fontWeight: 700 }}
+                        prefix={<ShoppingCartOutlined />}
+                      />
+                    </Card>
+                  </Col>
+                  <Col xs={24} sm={8} style={{ display: 'flex' }}>
+                    <Card className="glass-card" variant="borderless" style={{ width: '100%', height: '100%' }}>
+                      <Statistic
+                        title="Total Promo Investment"
+                        value={marketingData?.promoSummary?.totalPromoValue || 0}
+                        suffix={CURRENCY.symbol}
+                        valueStyle={{ color: '#10B981', fontWeight: 900 }}
+                        prefix={<DollarOutlined />}
+                      />
+                    </Card>
+                  </Col>
+                </Row>
+
+                // Pie Charts
+                <Row gutter={[16, 16]}>
+                  <Col xs={24} md={12}>
+                    <Card title="Sales by Customer Category" className="glass-card" variant="borderless">
+                      <div style={{ height: 300, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                        {marketingData?.categorySales && marketingData.categorySales.length > 0 ? (
+                          <ResponsiveContainer width="100%" height={300}>
+                            <PieChart>
+                              <Pie
+                                data={marketingData.categorySales}
+                                dataKey="sales"
+                                nameKey="category"
+                                cx="50%"
+                                cy="50%"
+                                outerRadius={80}
+                                fill="#8884d8"
+                                label={({ name, percent }) => `${name} ${((percent || 0) * 100).toFixed(0)}%`}
+                              >
+                                {marketingData.categorySales.map((_: any, index: number) => {
+                                  const colors = ['#6366F1', '#10B981', '#F59E0B', '#EC4899', '#8B5CF6'];
+                                  return <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />;
+                                })}
+                              </Pie>
+                              <Tooltip formatter={(v: any) => `${Number(v).toLocaleString()} ${CURRENCY.symbol}`} />
+                              <Legend />
+                            </PieChart>
+                          </ResponsiveContainer>
+                        ) : (
+                          <Text type="secondary">No data available</Text>
+                        )}
+                      </div>
+                    </Card>
+                  </Col>
+
+                  <Col xs={24} md={12}>
+                    <Card title="Sales by Customer Channel" className="glass-card" variant="borderless">
+                      <div style={{ height: 300, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                        {marketingData?.channelSales && marketingData.channelSales.length > 0 ? (
+                          <ResponsiveContainer width="100%" height={300}>
+                            <PieChart>
+                              <Pie
+                                data={marketingData.channelSales}
+                                dataKey="sales"
+                                nameKey="channel"
+                                cx="50%"
+                                cy="50%"
+                                outerRadius={80}
+                                fill="#82ca9d"
+                                label={({ name, percent }) => `${name} ${((percent || 0) * 100).toFixed(0)}%`}
+                              >
+                                {marketingData.channelSales.map((_: any, index: number) => {
+                                  const colors = ['#3B82F6', '#EC4899', '#8B5CF6', '#10B981', '#F59E0B'];
+                                  return <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />;
+                                })}
+                              </Pie>
+                              <Tooltip formatter={(v: any) => `${Number(v).toLocaleString()} ${CURRENCY.symbol}`} />
+                              <Legend />
+                            </PieChart>
+                          </ResponsiveContainer>
+                        ) : (
+                          <Text type="secondary">No data available</Text>
+                        )}
+                      </div>
+                    </Card>
+                  </Col>
+                </Row>
+              </Spin>
+            )
+          }
+          */
         ]}
       />
     </div>

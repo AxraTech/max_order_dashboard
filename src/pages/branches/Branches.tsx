@@ -275,7 +275,7 @@ export const Branches: React.FC = () => {
         }}
         footer={null}
         width={500}
-        destroyOnClose
+        destroyOnHidden
       >
         <Form
           form={form}
@@ -324,3 +324,4 @@ export const Branches: React.FC = () => {
     </div>
   );
 };
+

@@ -29,7 +29,8 @@ interface ProductItem {
   isControlled: boolean;
   storageConditions: string | null;
   category: CategoryInfo;
-  team: string | null;
+  businessUnitId?: string | null;
+  businessUnit?: { id: string; name: string } | null;
   expiryAlertThreshold: number;
 }
 
@@ -54,7 +55,7 @@ export const Products: React.FC = () => {
           limit: 5000,
           search: search || undefined,
           categoryId: selectedCategory === 'all' ? undefined : selectedCategory,
-          team: selectedTeam === 'all' ? undefined : selectedTeam,
+          businessUnitId: selectedBusinessUnit === 'all' ? undefined : selectedBusinessUnit,
         },
       });
       if (!res.data.success || res.data.data.length === 0) {
@@ -70,7 +71,7 @@ export const Products: React.FC = () => {
         'Brand Name': p.brandName || '—',
         'Generic Name': p.genericName || '—',
         'Category': p.category.name,
-        'Team': p.team || '—',
+        'Business Unit': p.businessUnit?.name || '—',
         'Dosage Form': p.dosageForm || '—',
         'Selling Price (MMK)': Number(p.sellingPrice),
         'Dealer Price (MMK)': Number(p.dealerPrice),
@@ -95,7 +96,15 @@ export const Products: React.FC = () => {
   // Filters
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
-  const [selectedTeam, setSelectedTeam] = useState<string>('all');
+  const [selectedBusinessUnit, setSelectedBusinessUnit] = useState<string>('all');
+  const [businessUnits, setBusinessUnits] = useState<any[]>([]);
+  const [newBUName, setNewBUName] = useState('');
+  const [creatingBU, setCreatingBU] = useState(false);
+  const [editingBUId, setEditingBUId] = useState<string | null>(null);
+  
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [creatingCategory, setCreatingCategory] = useState(false);
+  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
   
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -104,11 +113,12 @@ export const Products: React.FC = () => {
 
   useEffect(() => {
     fetchCategories();
+    fetchBusinessUnits();
   }, []);
 
   useEffect(() => {
     fetchProducts();
-  }, [search, selectedCategory, selectedTeam, currentPage, pageSize]);
+  }, [search, selectedCategory, selectedBusinessUnit, currentPage, pageSize]);
 
   const fetchCategories = async () => {
     try {
@@ -121,6 +131,105 @@ export const Products: React.FC = () => {
     }
   };
 
+  const fetchBusinessUnits = async () => {
+    try {
+      const res = await api.get('/products/business-units');
+      if (res.data.success) {
+        setBusinessUnits(res.data.data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch business units:', error);
+    }
+  };
+
+  const handleSaveBU = async () => {
+    if (!newBUName.trim()) return;
+    try {
+      setCreatingBU(true);
+      if (editingBUId) {
+        const res = await api.put(`/products/business-units/${editingBUId}`, { name: newBUName.trim() });
+        if (res.data.success) {
+          message.success('Business Unit updated');
+          setBusinessUnits(prev => prev.map(b => b.id === editingBUId ? { ...b, name: res.data.data.name } : b));
+          setEditingBUId(null);
+          setNewBUName('');
+        }
+      } else {
+        const res = await api.post('/products/business-units', { name: newBUName.trim() });
+        if (res.data.success) {
+          message.success('Business Unit created');
+          const newUnit = res.data.data;
+          setBusinessUnits((prev) => [...prev, newUnit]);
+          form.setFieldsValue({ businessUnitId: newUnit.id });
+          setNewBUName('');
+        }
+      }
+    } catch (error: any) {
+      message.error(error.response?.data?.message || 'Failed to save business unit');
+    } finally {
+      setCreatingBU(false);
+    }
+  };
+
+  const handleDeleteBU = async (id: string) => {
+    try {
+      const res = await api.delete(`/products/business-units/${id}`);
+      if (res.data.success) {
+        message.success('Business Unit deleted');
+        setBusinessUnits(prev => prev.filter(b => b.id !== id));
+        if (form.getFieldValue('businessUnitId') === id) {
+          form.setFieldsValue({ businessUnitId: undefined });
+        }
+      }
+    } catch (error: any) {
+      message.error(error.response?.data?.message || 'Failed to delete business unit');
+    }
+  };
+
+  const handleSaveCategory = async () => {
+    if (!newCategoryName.trim()) return;
+    try {
+      setCreatingCategory(true);
+      if (editingCategoryId) {
+        const res = await api.put(`/products/categories/${editingCategoryId}`, { name: newCategoryName.trim() });
+        if (res.data.success) {
+          message.success('Category updated');
+          setCategories(prev => prev.map(c => c.id === editingCategoryId ? { ...c, name: res.data.data.name } : c));
+          setEditingCategoryId(null);
+          setNewCategoryName('');
+        }
+      } else {
+        const res = await api.post('/products/categories', { name: newCategoryName.trim() });
+        if (res.data.success) {
+          message.success('Category created');
+          const newCat = res.data.data;
+          setCategories(prev => [...prev, newCat]);
+          form.setFieldsValue({ categoryId: newCat.id });
+          setNewCategoryName('');
+        }
+      }
+    } catch (error: any) {
+      message.error(error.response?.data?.message || 'Failed to save category');
+    } finally {
+      setCreatingCategory(false);
+    }
+  };
+
+  const handleDeleteCategory = async (id: string) => {
+    try {
+      const res = await api.delete(`/products/categories/${id}`);
+      if (res.data.success) {
+        message.success('Category deleted');
+        setCategories(prev => prev.filter(c => c.id !== id));
+        if (form.getFieldValue('categoryId') === id) {
+          form.setFieldsValue({ categoryId: undefined });
+        }
+      }
+    } catch (error: any) {
+      message.error(error.response?.data?.message || 'Failed to delete category (it may contain products)');
+    }
+  };
+
   const fetchProducts = async () => {
     try {
       setLoading(true);
@@ -130,7 +239,7 @@ export const Products: React.FC = () => {
           limit: pageSize,
           search: search || undefined,
           categoryId: selectedCategory === 'all' ? undefined : selectedCategory,
-          team: selectedTeam === 'all' ? undefined : selectedTeam,
+          businessUnitId: selectedBusinessUnit === 'all' ? undefined : selectedBusinessUnit,
         },
       });
       if (res.data.success) {
@@ -180,7 +289,7 @@ export const Products: React.FC = () => {
       brandName: record.brandName,
       genericName: record.genericName,
       categoryId: record.category.id,
-      team: record.team || null,
+      businessUnitId: record.businessUnitId || null,
       dosageForm: record.dosageForm,
       basePrice: record.basePrice,
       sellingPrice: record.sellingPrice,
@@ -249,12 +358,12 @@ export const Products: React.FC = () => {
       ),
     },
     {
-      title: 'Team',
-      key: 'team',
+      title: 'Business Unit',
+      key: 'businessUnit',
       render: (_: any, record: ProductItem) => (
-        record.team ? (
+        record.businessUnit ? (
           <Tag color="purple" style={{ border: 'none', borderRadius: '8px', margin: 0 }}>
-            {record.team}
+            {record.businessUnit.name}
           </Tag>
         ) : <Text type="secondary">—</Text>
       ),
@@ -405,19 +514,19 @@ export const Products: React.FC = () => {
           <Col xs={12} sm={6} md={6}>
             <Select
               style={{ width: '100%', borderRadius: '12px' }}
-              value={selectedTeam}
+              value={selectedBusinessUnit}
               onChange={(val) => {
-                setSelectedTeam(val);
+                setSelectedBusinessUnit(val);
                 setCurrentPage(1);
               }}
             >
-              <Select.Option value="all">All Teams</Select.Option>
-              {['CPD', 'G1', 'G2', 'G3', 'HOVID', 'PC'].map((t) => (
-                <Select.Option key={t} value={t}>
-                  {t}
+              <Select.Option value="all">All Business Units</Select.Option>
+              {businessUnits.map((bu) => (
+                <Select.Option key={bu.id} value={bu.id}>
+                  {bu.name}
                 </Select.Option>
               ))}
-              <Select.Option value="none">No Team</Select.Option>
+              <Select.Option value="none">No Business Unit</Select.Option>
             </Select>
           </Col>
         </Row>
@@ -454,7 +563,7 @@ export const Products: React.FC = () => {
         }}
         footer={null}
         width={600}
-        destroyOnClose
+        destroyOnHidden
       >
         <Form
           form={form}
@@ -512,22 +621,144 @@ export const Products: React.FC = () => {
                 label="Product Category"
                 rules={[{ required: true, message: 'Please select a category!' }]}
               >
-                <Select placeholder="Select category" style={{ borderRadius: '8px' }}>
+                <Select
+                  placeholder="Select category"
+                  style={{ borderRadius: '8px' }}
+                  allowClear
+                  dropdownRender={(menu) => (
+                    <>
+                      {menu}
+                      <div style={{ display: 'flex', flexWrap: 'nowrap', padding: '8px', borderTop: '1px solid #f0f0f0', gap: '8px' }}>
+                        <Input
+                          placeholder={editingCategoryId ? "Edit category name..." : "Add new category..."}
+                          value={newCategoryName}
+                          onChange={(e) => setNewCategoryName(e.target.value)}
+                          onKeyDown={(e) => e.stopPropagation()}
+                          style={{ flex: 'auto' }}
+                        />
+                        <Button
+                          type="primary"
+                          onClick={handleSaveCategory}
+                          loading={creatingCategory}
+                          style={{ flex: 'none' }}
+                        >
+                          {editingCategoryId ? 'Save' : 'Add'}
+                        </Button>
+                        {editingCategoryId && (
+                          <Button
+                            onClick={() => {
+                              setEditingCategoryId(null);
+                              setNewCategoryName('');
+                            }}
+                            style={{ flex: 'none' }}
+                          >
+                            Cancel
+                          </Button>
+                        )}
+                      </div>
+                    </>
+                  )}
+                >
                   {categories.map(cat => (
-                    <Select.Option key={cat.id} value={cat.id}>{cat.name}</Select.Option>
+                    <Select.Option key={cat.id} value={cat.id}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                        <span>{cat.name}</span>
+                        <div onClick={(e) => e.stopPropagation()} style={{ display: 'flex', gap: '4px' }}>
+                          <Button
+                            type="text"
+                            size="small"
+                            icon={<EditOutlined style={{ color: '#0284c7', fontSize: '12px' }} />}
+                            onClick={() => {
+                              setEditingCategoryId(cat.id);
+                              setNewCategoryName(cat.name);
+                            }}
+                            style={{ height: '22px', width: '22px', padding: 0 }}
+                          />
+                          <Button
+                            type="text"
+                            danger
+                            size="small"
+                            icon={<DeleteOutlined style={{ fontSize: '12px' }} />}
+                            onClick={() => handleDeleteCategory(cat.id)}
+                            style={{ height: '22px', width: '22px', padding: 0 }}
+                          />
+                        </div>
+                      </div>
+                    </Select.Option>
                   ))}
                 </Select>
               </Form.Item>
             </Col>
             <Col span={12}>
               <Form.Item
-                name="team"
-                label="Sales Team / Division"
-                rules={[{ required: true, message: 'Please select a team!' }]}
+                name="businessUnitId"
+                label="Business Unit"
+                rules={[{ required: true, message: 'Please select a Business Unit!' }]}
               >
-                <Select placeholder="Select team" style={{ borderRadius: '8px' }} allowClear>
-                  {['CPD', 'G1', 'G2', 'G3', 'HOVID', 'PC'].map(t => (
-                    <Select.Option key={t} value={t}>{t}</Select.Option>
+                <Select
+                  placeholder="Select Business Unit"
+                  style={{ borderRadius: '8px' }}
+                  allowClear
+                  dropdownRender={(menu) => (
+                    <>
+                      {menu}
+                      <div style={{ display: 'flex', flexWrap: 'nowrap', padding: '8px', borderTop: '1px solid #f0f0f0', gap: '8px' }}>
+                        <Input
+                          placeholder={editingBUId ? "Edit unit name..." : "Add new unit..."}
+                          value={newBUName}
+                          onChange={(e) => setNewBUName(e.target.value)}
+                          onKeyDown={(e) => e.stopPropagation()}
+                          style={{ flex: 'auto' }}
+                        />
+                        <Button
+                          type="primary"
+                          onClick={handleSaveBU}
+                          loading={creatingBU}
+                          style={{ flex: 'none' }}
+                        >
+                          {editingBUId ? 'Save' : 'Add'}
+                        </Button>
+                        {editingBUId && (
+                          <Button
+                            onClick={() => {
+                              setEditingBUId(null);
+                              setNewBUName('');
+                            }}
+                            style={{ flex: 'none' }}
+                          >
+                            Cancel
+                          </Button>
+                        )}
+                      </div>
+                    </>
+                  )}
+                >
+                  {businessUnits.map(bu => (
+                    <Select.Option key={bu.id} value={bu.id}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                        <span>{bu.name}</span>
+                        <div onClick={(e) => e.stopPropagation()} style={{ display: 'flex', gap: '4px' }}>
+                          <Button
+                            type="text"
+                            size="small"
+                            icon={<EditOutlined style={{ color: '#0284c7', fontSize: '12px' }} />}
+                            onClick={() => {
+                              setEditingBUId(bu.id);
+                              setNewBUName(bu.name);
+                            }}
+                            style={{ height: '22px', width: '22px', padding: 0 }}
+                          />
+                          <Button
+                            type="text"
+                            danger
+                            size="small"
+                            icon={<DeleteOutlined style={{ fontSize: '12px' }} />}
+                            onClick={() => handleDeleteBU(bu.id)}
+                            style={{ height: '22px', width: '22px', padding: 0 }}
+                          />
+                        </div>
+                      </div>
+                    </Select.Option>
                   ))}
                 </Select>
               </Form.Item>

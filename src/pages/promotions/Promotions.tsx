@@ -31,6 +31,7 @@ interface PromotionRecord {
   product: ProductItem | null;
   buyQty: number | null;
   freeQty: number | null;
+  tiers: Array<{ buyQty: number; freeQty: number }> | null;
   minOrderAmount: number | null;
   discountAmount: number | null;
   createdAt: string;
@@ -96,6 +97,7 @@ export const Promotions: React.FC = () => {
       type: 'BUY_N_GET_M',
       startDate: dayjs(),
       isActive: true,
+      tiers: [{ buyQty: 10, freeQty: 1 }],
     });
     setIsModalOpen(true);
   };
@@ -111,8 +113,7 @@ export const Promotions: React.FC = () => {
       startDate: dayjs(record.startDate),
       endDate: record.endDate ? dayjs(record.endDate) : null,
       productId: record.productId,
-      buyQty: record.buyQty,
-      freeQty: record.freeQty,
+      tiers: record.tiers && record.tiers.length > 0 ? record.tiers : [{ buyQty: record.buyQty, freeQty: record.freeQty }],
       minOrderAmount: record.minOrderAmount,
       discountAmount: record.discountAmount,
       isActive: record.isActive,
@@ -232,9 +233,19 @@ export const Promotions: React.FC = () => {
             <div>
               <Text strong>{record.product?.name || 'Any product'}</Text>
               <br />
-              <Text type="secondary" style={{ fontSize: '12px' }}>
-                Buy {record.buyQty} get {record.freeQty} free
-              </Text>
+              {record.tiers && record.tiers.length > 0 ? (
+                <div style={{ marginTop: '2px', display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                  {record.tiers.map((t, idx) => (
+                    <Tag color="blue" key={idx} style={{ margin: 0 }}>
+                      {t.buyQty} + {t.freeQty}
+                    </Tag>
+                  ))}
+                </div>
+              ) : (
+                <Text type="secondary" style={{ fontSize: '12px' }}>
+                  Buy {record.buyQty} get {record.freeQty} free
+                </Text>
+              )}
             </div>
           );
         }
@@ -395,9 +406,23 @@ export const Promotions: React.FC = () => {
             
             {detailPromo.type === 'BUY_N_GET_M' ? (
               <>
-                <Descriptions.Item label="Target Product">{detailPromo.product?.name || '—'}</Descriptions.Item>
-                <Descriptions.Item label="Buy Quantity">{detailPromo.buyQty}</Descriptions.Item>
-                <Descriptions.Item label="Free Quantity">{detailPromo.freeQty}</Descriptions.Item>
+                 <Descriptions.Item label="Target Product">{detailPromo.product?.name || '—'}</Descriptions.Item>
+                 {detailPromo.tiers && detailPromo.tiers.length > 0 ? (
+                   <Descriptions.Item label="Promotion Tiers">
+                     <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                       {detailPromo.tiers.map((t, idx) => (
+                         <div key={idx}>
+                           <Text strong>Buy {t.buyQty}</Text> → <Text type="success">Get {t.freeQty} Free</Text>
+                         </div>
+                       ))}
+                     </div>
+                   </Descriptions.Item>
+                 ) : (
+                   <>
+                     <Descriptions.Item label="Buy Quantity">{detailPromo.buyQty}</Descriptions.Item>
+                     <Descriptions.Item label="Free Quantity">{detailPromo.freeQty}</Descriptions.Item>
+                   </>
+                 )}
               </>
             ) : (
               <>
@@ -423,7 +448,7 @@ export const Promotions: React.FC = () => {
         okText={editingPromo ? 'Update' : 'Create'}
         onOk={() => form.submit()}
         width={600}
-        destroyOnClose
+        destroyOnHidden
       >
         <Form
           form={form}
@@ -517,24 +542,50 @@ export const Promotions: React.FC = () => {
                   </Form.Item>
                 </Col>
                 
-                <Col span={12}>
-                  <Form.Item
-                    name="buyQty"
-                    label="Buy Quantity"
-                    rules={[{ required: true, message: 'Minimum 1' }]}
-                  >
-                    <InputNumber min={1} style={{ width: '100%', borderRadius: '12px' }} placeholder="e.g. 10" />
-                  </Form.Item>
-                </Col>
-                
-                <Col span={12}>
-                  <Form.Item
-                    name="freeQty"
-                    label="Free Quantity"
-                    rules={[{ required: true, message: 'Minimum 1' }]}
-                  >
-                    <InputNumber min={1} style={{ width: '100%', borderRadius: '12px' }} placeholder="e.g. 1" />
-                  </Form.Item>
+                <Col span={24}>
+                  <div style={{ marginBottom: '8px', fontWeight: 600 }}>Promotion Tiers</div>
+                  <Form.List name="tiers">
+                    {(fields, { add, remove }) => (
+                      <>
+                        {fields.map(({ key, name, ...restField }) => (
+                          <Space key={key} style={{ display: 'flex', marginBottom: 8 }} align="baseline">
+                            <Form.Item
+                              {...restField}
+                              name={[name, 'buyQty']}
+                              rules={[{ required: true, message: 'Required' }]}
+                              style={{ marginBottom: 0 }}
+                            >
+                              <InputNumber min={1} style={{ width: 180, borderRadius: '8px' }} placeholder="Buy Qty (e.g. 10)" />
+                            </Form.Item>
+                            
+                            <span style={{ color: '#8c8c8c' }}>get</span>
+                            
+                            <Form.Item
+                              {...restField}
+                              name={[name, 'freeQty']}
+                              rules={[{ required: true, message: 'Required' }]}
+                              style={{ marginBottom: 0 }}
+                            >
+                              <InputNumber min={1} style={{ width: 180, borderRadius: '8px' }} placeholder="Free Qty (e.g. 1)" />
+                            </Form.Item>
+                            
+                            <span style={{ color: '#8c8c8c' }}>free</span>
+
+                            {fields.length > 1 && (
+                              <Button type="link" danger onClick={() => remove(name)}>
+                                Remove
+                              </Button>
+                            )}
+                          </Space>
+                        ))}
+                        <Form.Item style={{ marginTop: 8 }}>
+                          <Button type="dashed" onClick={() => add({ buyQty: undefined, freeQty: undefined })} block icon={<PlusOutlined />} style={{ borderRadius: '12px' }}>
+                            Add Promotion Tier
+                          </Button>
+                        </Form.Item>
+                      </>
+                    )}
+                  </Form.List>
                 </Col>
               </>
             ) : (
@@ -576,3 +627,4 @@ export const Promotions: React.FC = () => {
     </div>
   );
 };
+
