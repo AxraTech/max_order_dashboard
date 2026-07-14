@@ -225,9 +225,9 @@ export const AdminLayout: React.FC = () => {
             letterSpacing: '-0.5px',
             borderBottom: '1px solid var(--border-color)'
           }}>
-            {collapsed ? 'M' : (
+            {collapsed ? <img src="/logo.png" alt="MEN" style={{ height: 28, width: 28, objectFit: 'contain' }} /> : (
               <>
-                <span>MaxOrder</span>
+                <img src="/logo.png" alt="MEN Logo" style={{ height: 32, objectFit: 'contain' }} />
                 <Tag color="blue" style={{ margin: 0, fontWeight: 600, fontSize: '10px' }}>HQ ADMIN</Tag>
               </>
             )}

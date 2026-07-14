@@ -23,6 +23,7 @@ import * as dashboardApi from '../../services/dashboard.service';
 import dayjs from 'dayjs';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../../services/api';
+import { CURRENCY } from '../../types/index';
 
 const { Title } = Typography;
 

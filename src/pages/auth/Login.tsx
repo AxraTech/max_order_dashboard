@@ -55,15 +55,8 @@ export const Login: React.FC = () => {
         variant="borderless"
       >
         <div style={{ textAlign: 'center', marginBottom: '32px' }}>
-          <div style={{ 
-            width: '64px', height: '64px', background: 'var(--primary-color)', 
-            borderRadius: '16px', margin: '0 auto 16px', display: 'flex', 
-            alignItems: 'center', justifyContent: 'center',
-            boxShadow: '0 8px 16px rgba(79, 70, 229, 0.3)'
-          }}>
-            <span style={{ color: 'white', fontSize: '28px', fontWeight: 'bold' }}>M</span>
-          </div>
-          <Title level={2} style={{ margin: 0, fontWeight: 700 }}>MaxOrder HQ</Title>
+          <img src="/logo.png" alt="MEN Logo" style={{ height: 64, margin: '0 auto 16px', display: 'block' }} />
+          <Title level={3} style={{ margin: 0, fontWeight: 700, color: '#1d4ed8' }}>Myanma Executive Network Co.,Ltd.</Title>
           <Text type="secondary">Sign in to the Admin Dashboard</Text>
         </div>
 
