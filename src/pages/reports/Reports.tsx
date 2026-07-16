@@ -6,7 +6,7 @@ import {
 import {
   ReloadOutlined, CalendarOutlined, FileTextOutlined,
   BarChartOutlined, DollarOutlined, ShoppingCartOutlined,
-  StarOutlined, PercentageOutlined, DownloadOutlined
+  StarOutlined, PercentageOutlined, DownloadOutlined, CheckCircleOutlined
 } from '@ant-design/icons';
 import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid,
@@ -91,23 +91,23 @@ export const Reports: React.FC = () => {
       if (res.data.success) {
         setBranches(res.data.data.filter((b: any) => b.isActive));
       }
-    }).catch(() => {});
+    }).catch(() => { });
 
     api.get('/sales-reps', { params: { limit: 200 } }).then(res => {
       if (res.data.success) setSalesReps(res.data.data);
-    }).catch(() => {});
+    }).catch(() => { });
 
     api.get('/customers', { params: { limit: 200 } }).then(res => {
       if (res.data.success) setCustomers(res.data.data);
-    }).catch(() => {});
+    }).catch(() => { });
 
     api.get('/products/categories').then(res => {
       if (res.data.success) setCategories(res.data.data);
-    }).catch(() => {});
+    }).catch(() => { });
 
     api.get('/products/business-units').then(res => {
       if (res.data.success) setBusinessUnits(res.data.data);
-    }).catch(() => {});
+    }).catch(() => { });
   }, [isBranchManager, user]);
 
   // Fetch report data based on active tab and filters
@@ -177,7 +177,7 @@ export const Reports: React.FC = () => {
   };
 
   // --- Dynamic KPIs Calculations ---
-  
+
   const dailyKPIs = useMemo(() => {
     const totalRevenue = Math.round(dailySales.reduce((sum, item) => sum + item.totalAmount, 0));
     const totalOrders = dailySales.reduce((sum, item) => sum + item.orderCount, 0);
@@ -187,7 +187,7 @@ export const Reports: React.FC = () => {
   }, [dailySales]);
 
   const systemKPIs = useMemo(() => {
-    const totalRevenue = Math.round(systemSales.reduce((sum, item) => sum + item.totalAmount, 0));
+    const totalRevenue = Math.round(systemSales.reduce((sum, item) => sum + item.netSales, 0));
     const totalOrders = systemSales.length;
     const avgOrderValue = totalOrders > 0 ? Math.round(totalRevenue / totalOrders) : 0;
     const cancelledCount = systemSales.filter(item => item.status === 'CANCELLED').length;
@@ -195,10 +195,11 @@ export const Reports: React.FC = () => {
   }, [systemSales]);
 
   const itemKPIs = useMemo(() => {
-    const totalQty = itemSales.reduce((sum, item) => sum + item.quantitySold, 0);
-    const totalRev = Math.round(itemSales.reduce((sum, item) => sum + item.totalRevenue, 0));
-    const distinctItems = itemSales.length;
-    const topItem = itemSales.length > 0 ? itemSales[0] : null; // Sorted desc in backend
+    const totalQty = itemSales.reduce((sum, item) => sum + (item.salesQuantity || 0), 0);
+    const totalRev = Math.round(itemSales.reduce((sum, item) => sum + (item.netSales || 0), 0));
+    const distinctItems = new Set(itemSales.map(i => i.productCode)).size;
+    const topItem = itemSales.length > 0 ? itemSales[0] : null;
+
     return { totalQty, totalRev, distinctItems, topItem };
   }, [itemSales]);
 
@@ -229,13 +230,14 @@ export const Reports: React.FC = () => {
   }, [systemSales]);
 
   // ─── Sale Detail Excel Export ───────────────────────────────────────────────
+  /*
   const handleExportSaleDetail = () => {
     if (saleDetail.length === 0) { message.warning('No data to export'); return; }
 
     const branchName = selectedBranch === 'all'
       ? 'All Branches'
       : branches.find(b => b.id === selectedBranch)?.name || 'All Branches';
-    
+
     // Dynamic company name reflecting the selected branch
     const companyName = `MEN Company (2026 -2027) New ( ${branchName} )`;
     const reportTitle = 'Sale Details Information By InvoiceDate AND Invoice ID';
@@ -243,11 +245,11 @@ export const Reports: React.FC = () => {
     const toDate = dateRange?.[1]?.format('DD/MM/YYYY') ?? '';
     const period = `From ${fromDate} To ${toDate}`;
 
-    const COLS = ['No','Invoice ID','Invoice Date','Customer ID','Customer Name',
-      'Stock ID','Stock Name','Cur:ID','Rate','Quantity','UM ID','Price',
-      'Total Amount','Discount %','Discount','Net Price','Amount',
-      'Commission','Expenses','Tax','NetAmount','Paid Amount',
-      'Operator','Distribution','Staff','Warranty ID','Remark','Category'];
+    const COLS = ['No', 'Invoice ID', 'Invoice Date', 'Customer ID', 'Customer Name',
+      'Stock ID', 'Stock Name', 'Cur:ID', 'Rate', 'Quantity', 'UM ID', 'Price',
+      'Total Amount', 'Discount %', 'Discount', 'Net Price', 'Amount',
+      'Commission', 'Expenses', 'Tax', 'NetAmount', 'Paid Amount',
+      'Operator', 'Distribution', 'Staff', 'Warranty ID', 'Remark', 'Category'];
 
     // Build rows grouped by date → invoice with subtotals
     type WsRow = (string | number | null)[];
@@ -273,10 +275,10 @@ export const Reports: React.FC = () => {
       Object.entries(byInv).forEach(([_invId, lines]) => {
         lines.forEach((r: any) => {
           wsRows.push([r.no, r.invoiceId, r.invoiceDate, r.customerId, r.customerName,
-            r.stockId, r.stockName, r.curId, r.rate, r.quantity, r.umId, r.price,
-            r.totalAmount, r.discountPct, r.discount, r.netPrice, r.amount,
-            r.commission, r.expenses, r.tax, r.netAmount, r.paidAmount,
-            r.operator, r.distribution, r.staff, r.warrantyId, r.remark, r.category]);
+          r.stockId, r.stockName, r.curId, r.rate, r.quantity, r.umId, r.price,
+          r.totalAmount, r.discountPct, r.discount, r.netPrice, r.amount,
+          r.commission, r.expenses, r.tax, r.netAmount, r.paidAmount,
+          r.operator, r.distribution, r.staff, r.warrantyId, r.remark, r.category]);
         });
 
         // Invoice subtotal
@@ -315,8 +317,8 @@ export const Reports: React.FC = () => {
     const ws = XLSX.utils.aoa_to_sheet(wsRows);
 
     // Column widths
-    ws['!cols'] = [8,14,14,14,28,20,30,8,6,10,8,14,14,12,12,14,14,
-      12,12,10,14,14,12,14,20,12,16,12].map(w => ({ wch: w }));
+    ws['!cols'] = [8, 14, 14, 14, 28, 20, 30, 8, 6, 10, 8, 14, 14, 12, 12, 14, 14,
+      12, 12, 10, 14, 14, 12, 14, 20, 12, 16, 12].map(w => ({ wch: w }));
 
     // Merge title rows
     ws['!merges'] = [
@@ -382,7 +384,7 @@ export const Reports: React.FC = () => {
           // Regular data rows
           const colLetter = key.replace(/[0-9]+/, '');
           const rightAlignCols = ['I', 'J', 'L', 'M', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W'];
-          
+
           cell.s = {
             font: { sz: 9.5, name: 'Calibri' },
             alignment: rightAlignCols.includes(colLetter) ? { horizontal: 'right' } : undefined
@@ -396,6 +398,7 @@ export const Reports: React.FC = () => {
     XLSX.writeFile(wb, `Sale_Report_${fromDate}_${toDate}.xlsx`);
     message.success('Sale Detail Report exported successfully!');
   };
+  */
 
   const handleExportDailySales = () => {
     if (dailySales.length === 0) { message.warning('No data to export'); return; }
@@ -403,7 +406,7 @@ export const Reports: React.FC = () => {
     const branchName = selectedBranch === 'all'
       ? 'All Branches'
       : branches.find(b => b.id === selectedBranch)?.name || 'All Branches';
-    
+
     const companyName = `MEN Company (2026 -2027) New ( ${branchName} )`;
     const reportTitle = 'Daily Sales Performance Report';
     const fromDate = dateRange?.[0]?.format('DD/MM/YYYY') ?? '';
@@ -501,7 +504,7 @@ export const Reports: React.FC = () => {
     const branchName = selectedBranch === 'all'
       ? 'All Branches'
       : branches.find(b => b.id === selectedBranch)?.name || 'All Branches';
-    
+
     const companyName = `MEN Company (2026 -2027) New ( ${branchName} )`;
     const reportTitle = 'System Sales Report (All Orders)';
     const fromDate = dateRange?.[0]?.format('DD/MM/YYYY') ?? '';
@@ -510,8 +513,9 @@ export const Reports: React.FC = () => {
 
     const COLS = [
       'Order No.', 'Order Date', 'Customer Code', 'Customer Name',
-      'Sales Rep / MSR', 'Branch', 'Status', 'Subtotal (MMK)',
-      'Tax (MMK)', 'Discount (MMK)', 'Total Amount (MMK)'
+      'Sales Rep Name', 'Sales Team', 'Status', 'Gross Sales (MMK)',
+      'Tax (MMK)', 'Sales Discount (MMK)', 'Manual Discount (MMK)', 'COD Discount (MMK)', 'Partner Commission (MMK)', 'Cashback (MMK)', 'Total Discount (MMK)',
+      'FOC Qty', 'Sample Qty', 'Net Sales (MMK)'
     ];
 
     type WsRow = (string | number | null)[];
@@ -530,24 +534,38 @@ export const Reports: React.FC = () => {
         r.salesRepName,
         r.branchName,
         r.status.replace(/_/g, ' '),
-        Number(r.subtotal),
+        Number(r.grossSales),
         Number(r.tax),
-        Number(r.discount),
-        Number(r.totalAmount)
+        Number(r.promoDiscount),
+        Number(r.manualDiscount),
+        Number(r.codDiscount),
+        Number(r.partnerCommission || 0),
+        Number(r.cashback),
+        Number(r.totalDiscount || 0),
+        Number(r.focQty),
+        Number(r.sampleQty),
+        Number(r.netSales)
       ]);
     });
 
-    const gSub = systemSales.reduce((s, r) => s + Number(r.subtotal), 0);
+    const gGross = systemSales.reduce((s, r) => s + Number(r.grossSales), 0);
     const gTax = systemSales.reduce((s, r) => s + Number(r.tax), 0);
-    const gDisc = systemSales.reduce((s, r) => s + Number(r.discount), 0);
-    const gTotal = systemSales.reduce((s, r) => s + Number(r.totalAmount), 0);
+    const gPromo = systemSales.reduce((s, r) => s + Number(r.promoDiscount), 0);
+    const gManual = systemSales.reduce((s, r) => s + Number(r.manualDiscount), 0);
+    const gCod = systemSales.reduce((s, r) => s + Number(r.codDiscount), 0);
+    const gPartner = systemSales.reduce((s, r) => s + Number(r.partnerCommission || 0), 0);
+    const gTotalDisc = systemSales.reduce((s, r) => s + Number(r.totalDiscount || 0), 0);
+    const gCash = systemSales.reduce((s, r) => s + Number(r.cashback), 0);
+    const gFoc = systemSales.reduce((s, r) => s + Number(r.focQty), 0);
+    const gSample = systemSales.reduce((s, r) => s + Number(r.sampleQty), 0);
+    const gNet = systemSales.reduce((s, r) => s + Number(r.netSales), 0);
     wsRows.push([
       'Grand Total', null, null, null, null, null, null,
-      gSub, gTax, gDisc, gTotal
+      gGross, gTax, gPromo, gManual, gCod, gPartner, gCash, gTotalDisc, gFoc, gSample, gNet
     ]);
 
     const ws = XLSX.utils.aoa_to_sheet(wsRows);
-    ws['!cols'] = [14, 18, 14, 25, 20, 16, 14, 18, 16, 16, 18].map(w => ({ wch: w }));
+    ws['!cols'] = [14, 18, 14, 25, 20, 16, 14, 18, 16, 18, 18, 18, 18, 16, 18, 12, 12, 18].map(w => ({ wch: w }));
 
     ws['!merges'] = [
       { s: { r: 0, c: 0 }, e: { r: 0, c: COLS.length - 1 } },
@@ -589,7 +607,7 @@ export const Reports: React.FC = () => {
           };
         } else {
           const colLetter = key.replace(/[0-9]+/, '');
-          const rightAlignCols = ['H', 'I', 'J', 'K'];
+          const rightAlignCols = ['H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P'];
           cell.s = {
             font: { sz: 9.5, name: 'Calibri' },
             alignment: rightAlignCols.includes(colLetter) ? { horizontal: 'right' } : undefined
@@ -610,16 +628,20 @@ export const Reports: React.FC = () => {
     const branchName = selectedBranch === 'all'
       ? 'All Branches'
       : branches.find(b => b.id === selectedBranch)?.name || 'All Branches';
-    
+
     const companyName = `MEN Company (2026 -2027) New ( ${branchName} )`;
-    const reportTitle = 'Item Sales Report (Products Performance)';
+    const reportTitle = 'Daily Sales Raw Data Report';
     const fromDate = dateRange?.[0]?.format('DD/MM/YYYY') ?? '';
     const toDate = dateRange?.[1]?.format('DD/MM/YYYY') ?? '';
     const period = `From ${fromDate} To ${toDate}`;
 
     const COLS = [
-      'Product Code', 'SKU', 'Product Name', 'Category',
-      'Quantity Sold', 'UOM', 'Total Discounts Given (MMK)', 'Total Revenue (MMK)'
+      'B.Unit', 'Supplier Name', 'Product Code', 'Product Name',
+      'Customer ID', 'Company Name', 'Region', 'District',
+      'City', 'Township', 'Main Channel', 'Sub-channel', 'Invoice ID',
+      'Inv Date', 'Year', 'Quarter', 'Month', 'Unit Price',
+      'UOM', 'Sales Qty', 'FOC Qty', 'Sample Qty', 'Total Qty',
+      'Sales Rep', 'Sales Team', 'Remark'
     ];
 
     type WsRow = (string | number | null)[];
@@ -631,26 +653,17 @@ export const Reports: React.FC = () => {
 
     itemSales.forEach((r: any) => {
       wsRows.push([
-        r.productCode,
-        r.sku,
-        r.productName,
-        r.categoryName,
-        Number(r.quantitySold),
-        r.uom,
-        Number(r.totalDiscount),
-        Number(r.totalRevenue)
+        r.businessUnit, r.supplierName, r.productCode, r.productName,
+        r.customerId, r.companyName, r.region, r.district,
+        r.city, r.township, r.mainChannel, r.subChannel, r.invoiceId,
+        r.invoiceDate, r.year, r.quarter, r.month, r.unitPrice,
+        r.sellingUom, r.salesQuantity, r.focQuantity, r.sampleQuantity,
+        r.totalQuantity, r.salesRepName, r.salesTeam, r.remark
       ]);
     });
 
-    const gQty = itemSales.reduce((s, r) => s + Number(r.quantitySold), 0);
-    const gDisc = itemSales.reduce((s, r) => s + Number(r.totalDiscount), 0);
-    const gTotal = itemSales.reduce((s, r) => s + Number(r.totalRevenue), 0);
-    wsRows.push([
-      'Grand Total', null, null, null, gQty, null, gDisc, gTotal
-    ]);
-
     const ws = XLSX.utils.aoa_to_sheet(wsRows);
-    ws['!cols'] = [16, 14, 25, 18, 14, 10, 25, 20].map(w => ({ wch: w }));
+    ws['!cols'] = COLS.map(() => ({ wch: 15 }));
 
     ws['!merges'] = [
       { s: { r: 0, c: 0 }, e: { r: 0, c: COLS.length - 1 } },
@@ -682,28 +695,13 @@ export const Reports: React.FC = () => {
           }
         };
       } else {
-        const firstCellInRow = ws[`A${rowNum}`];
-        const val = firstCellInRow ? String(firstCellInRow.v || '') : '';
-
-        if (val === 'Grand Total') {
-          cell.s = {
-            font: { bold: true, sz: 10, name: 'Calibri' },
-            fill: { fgColor: { rgb: 'F5F3FF' } }
-          };
-        } else {
-          const colLetter = key.replace(/[0-9]+/, '');
-          const rightAlignCols = ['E', 'G', 'H'];
-          cell.s = {
-            font: { sz: 9.5, name: 'Calibri' },
-            alignment: rightAlignCols.includes(colLetter) ? { horizontal: 'right' } : undefined
-          };
-        }
+        cell.s = { font: { sz: 9.5, name: 'Calibri' } };
       }
     });
 
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Item_Sales');
-    XLSX.writeFile(wb, `Item_Sales_${fromDate}_${toDate}.xlsx`);
+    XLSX.writeFile(wb, `Daily_Sales_Raw_Data_${fromDate}_${toDate}.xlsx`);
     message.success('Item Sales Report exported successfully!');
   };
 
@@ -867,7 +865,7 @@ export const Reports: React.FC = () => {
             children: (
               <Spin spinning={loading}>
                 {/* KPI Cards */}
-                 <Row gutter={[16, 16]} style={{ marginBottom: '24px' }}>
+                <Row gutter={[16, 16]} style={{ marginBottom: '24px' }}>
                   <Col xs={24} sm={12} lg={6} style={{ display: 'flex' }}>
                     <Card className="glass-card" variant="borderless" style={{ width: '100%', height: '100%' }}>
                       <Statistic
@@ -1020,7 +1018,7 @@ export const Reports: React.FC = () => {
                       <Statistic
                         title="Cancelled Orders"
                         value={systemKPIs.cancelledCount}
-                        valueStyle={{ color: systemKPIs.cancelledCount > 0 ? '#EF4444' : 'inherit' }}
+                        styles={{ content: { color: systemKPIs.cancelledCount > 0 ? '#EF4444' : 'inherit' } }}
                         prefix={<ReloadOutlined />}
                       />
                     </Card>
@@ -1082,7 +1080,7 @@ export const Reports: React.FC = () => {
                               <XAxis dataKey="orderNumber" tick={{ fontSize: 9, fill: '#6b7280' }} />
                               <YAxis tickFormatter={(v) => formatValue(v)} tick={{ fontSize: 10, fill: '#6b7280' }} />
                               <Tooltip formatter={(value: any) => [`${Number(value).toLocaleString()} ${CURRENCY.symbol}`, 'Amount']} />
-                              <Bar dataKey="totalAmount" fill="#3B82F6" radius={[4, 4, 0, 0]} />
+                              <Bar dataKey="netSales" fill="#3B82F6" radius={[4, 4, 0, 0]} />
                             </BarChart>
                           </ResponsiveContainer>
                         ) : (
@@ -1114,13 +1112,13 @@ export const Reports: React.FC = () => {
                   <Table
                     dataSource={systemSales}
                     pagination={{ pageSize: 10, showSizeChanger: true }}
-                    scroll={{ x: 1100 }}
+                    scroll={{ x: 1500 }}
                     columns={[
                       { title: 'Order No.', dataIndex: 'orderNumber', key: 'orderNumber', sorter: (a, b) => a.orderNumber.localeCompare(b.orderNumber), render: (v) => <Text code strong>{v}</Text> },
                       { title: 'Order Date', dataIndex: 'orderDate', key: 'orderDate', sorter: (a, b) => a.orderDate.localeCompare(b.orderDate), render: (v) => dayjs(v).format('YYYY-MM-DD HH:mm') },
                       { title: 'Customer', key: 'customer', render: (_, r) => <div><Text strong>{r.customerName}</Text><br /><Text type="secondary" style={{ fontSize: 11 }}>{r.customerCode}</Text></div> },
-                      { title: 'Sales Rep / MSR', dataIndex: 'salesRepName', key: 'salesRepName' },
-                      { title: 'Branch', dataIndex: 'branchName', key: 'branchName' },
+                      { title: 'Sales Rep Name', dataIndex: 'salesRepName', key: 'salesRepName' },
+                      { title: 'Sales Team', dataIndex: 'branchName', key: 'branchName' },
                       {
                         title: 'Status',
                         dataIndex: 'status',
@@ -1133,10 +1131,17 @@ export const Reports: React.FC = () => {
                           </Tag>
                         )
                       },
-                      { title: 'Subtotal', dataIndex: 'subtotal', key: 'subtotal', render: (v) => `${Number(v).toLocaleString()} ${CURRENCY.symbol}` },
+                      { title: 'Gross Sales', dataIndex: 'grossSales', key: 'grossSales', render: (v) => `${Number(v).toLocaleString()} ${CURRENCY.symbol}` },
                       { title: 'Tax (5%)', dataIndex: 'tax', key: 'tax', render: (v) => `${Number(v).toLocaleString()} ${CURRENCY.symbol}` },
-                      { title: 'Discount', dataIndex: 'discount', key: 'discount', render: (v) => `${Number(v).toLocaleString()} ${CURRENCY.symbol}` },
-                      { title: 'Total Total', dataIndex: 'totalAmount', key: 'totalAmount', sorter: (a, b) => a.totalAmount - b.totalAmount, render: (v) => <Text strong style={{ color: '#3B82F6' }}>{Number(v).toLocaleString()} {CURRENCY.symbol}</Text> }
+                      { title: 'Promo Disc.', dataIndex: 'promoDiscount', key: 'promoDiscount', render: (v) => `${Number(v).toLocaleString()} ${CURRENCY.symbol}` },
+                      { title: 'Manual Disc.', dataIndex: 'manualDiscount', key: 'manualDiscount', render: (v) => `${Number(v).toLocaleString()} ${CURRENCY.symbol}` },
+                      { title: 'COD Disc.', dataIndex: 'codDiscount', key: 'codDiscount', render: (v) => `${Number(v).toLocaleString()} ${CURRENCY.symbol}` },
+                      { title: 'Partner Commission', dataIndex: 'partnerCommission', key: 'partnerCommission', render: (v) => `${Number(v).toLocaleString()} ${CURRENCY.symbol}` },
+                      { title: 'Cashback', dataIndex: 'cashback', key: 'cashback', render: (v) => `${Number(v).toLocaleString()} ${CURRENCY.symbol}` },
+                      { title: 'Total Disc.', dataIndex: 'totalDiscount', key: 'totalDiscount', render: (v) => `${Number(v).toLocaleString()} ${CURRENCY.symbol}` },
+                      { title: 'FOC Qty', dataIndex: 'focQty', key: 'focQty', render: (v) => Number(v).toLocaleString() },
+                      { title: 'Sample Qty', dataIndex: 'sampleQty', key: 'sampleQty', render: (v) => Number(v).toLocaleString() },
+                      { title: 'Net Sales', dataIndex: 'netSales', key: 'netSales', sorter: (a, b) => a.netSales - b.netSales, render: (v) => <Text strong style={{ color: '#3B82F6' }}>{Number(v).toLocaleString()} {CURRENCY.symbol}</Text> }
                     ]}
                   />
                 </Card>
@@ -1191,7 +1196,7 @@ export const Reports: React.FC = () => {
                       <Statistic
                         title="Top Seller Item"
                         value={itemKPIs.topItem ? itemKPIs.topItem.productName : '—'}
-                        valueStyle={{ fontSize: '15px', fontWeight: 700 }}
+                        styles={{ content: { fontSize: '15px', fontWeight: 700 } }}
                         prefix={<StarOutlined style={{ color: '#F59E0B' }} />}
                       />
                     </Card>
@@ -1210,7 +1215,7 @@ export const Reports: React.FC = () => {
                               <XAxis dataKey="productName" tick={{ fontSize: 10, fill: '#6b7280' }} />
                               <YAxis tick={{ fontSize: 11, fill: '#6b7280' }} />
                               <Tooltip formatter={(value: any) => [value, 'Quantity Sold']} />
-                              <Bar dataKey="quantitySold" fill="#8B5CF6" radius={[4, 4, 0, 0]} barSize={40}>
+                              <Bar dataKey="salesQuantity" fill="#8B5CF6" radius={[4, 4, 0, 0]} barSize={40}>
                                 {itemSales.slice(0, 10).map((_, index) => (
                                   <Cell key={`cell-${index}`} fill={index === 0 ? '#6366F1' : '#8B5CF6'} />
                                 ))}
@@ -1246,15 +1251,34 @@ export const Reports: React.FC = () => {
                   <Table
                     dataSource={itemSales.map((item, idx) => ({ ...item, key: idx }))}
                     pagination={{ pageSize: 10, showSizeChanger: true }}
+                    scroll={{ x: 'max-content' }}
                     columns={[
-                      { title: 'Code', dataIndex: 'productCode', key: 'productCode', render: (v) => <Text code>{v}</Text> },
-                      { title: 'SKU', dataIndex: 'sku', key: 'sku' },
-                      { title: 'Product Name', dataIndex: 'productName', key: 'productName', sorter: (a, b) => a.productName.localeCompare(b.productName) },
-                      { title: 'Category', dataIndex: 'categoryName', key: 'categoryName' },
-                      { title: 'Business Unit', dataIndex: 'businessUnitName', key: 'businessUnitName' },
-                      { title: 'Quantity Sold', dataIndex: 'quantitySold', key: 'quantitySold', sorter: (a, b) => a.quantitySold - b.quantitySold, render: (v, r) => <Text strong>{v} {r.uom}</Text> },
-                      { title: 'Total Discounts Given', dataIndex: 'totalDiscount', key: 'totalDiscount', render: (v) => `${Number(v).toLocaleString()} ${CURRENCY.symbol}` },
-                      { title: 'Total Revenue', dataIndex: 'totalRevenue', key: 'totalRevenue', sorter: (a, b) => a.totalRevenue - b.totalRevenue, render: (v) => <Text strong style={{ color: '#8B5CF6' }}>{Number(v).toLocaleString()} {CURRENCY.symbol}</Text> }
+                      { title: 'B.Unit', dataIndex: 'businessUnit', key: 'businessUnit' },
+                      { title: 'Supplier Name', dataIndex: 'supplierName', key: 'supplierName' },
+                      { title: 'Product Code', dataIndex: 'productCode', key: 'productCode', render: (v) => <Text code>{v}</Text> },
+                      { title: 'Product Name', dataIndex: 'productName', key: 'productName' },
+                      { title: 'Customer ID', dataIndex: 'customerId', key: 'customerId' },
+                      { title: 'Company Name', dataIndex: 'companyName', key: 'companyName' },
+                      { title: 'Region', dataIndex: 'region', key: 'region' },
+                      { title: 'District', dataIndex: 'district', key: 'district' },
+                      { title: 'City', dataIndex: 'city', key: 'city' },
+                      { title: 'Township', dataIndex: 'township', key: 'township' },
+                      { title: 'Main Channel', dataIndex: 'mainChannel', key: 'mainChannel' },
+                      { title: 'Sub-channel', dataIndex: 'subChannel', key: 'subChannel' },
+                      { title: 'Invoice ID', dataIndex: 'invoiceId', key: 'invoiceId' },
+                      { title: 'Inv Date', dataIndex: 'invoiceDate', key: 'invoiceDate' },
+                      { title: 'Year', dataIndex: 'year', key: 'year' },
+                      { title: 'Quarter', dataIndex: 'quarter', key: 'quarter' },
+                      { title: 'Month', dataIndex: 'month', key: 'month' },
+                      { title: 'Unit Price', dataIndex: 'unitPrice', key: 'unitPrice', render: (v) => Number(v).toLocaleString() },
+                      { title: 'UOM', dataIndex: 'sellingUom', key: 'sellingUom' },
+                      { title: 'Sales Qty', dataIndex: 'salesQuantity', key: 'salesQuantity', render: (v) => <Text strong>{v}</Text> },
+                      { title: 'FOC Qty', dataIndex: 'focQuantity', key: 'focQuantity' },
+                      { title: 'Sample Qty', dataIndex: 'sampleQuantity', key: 'sampleQuantity' },
+                      { title: 'Total Qty', dataIndex: 'totalQuantity', key: 'totalQuantity', render: (v) => <Text strong type="success">{v}</Text> },
+                      { title: 'Sales Rep', dataIndex: 'salesRepName', key: 'salesRepName' },
+                      { title: 'Sales Team', dataIndex: 'salesTeam', key: 'salesTeam' },
+                      { title: 'Remark', dataIndex: 'remark', key: 'remark' }
                     ]}
                   />
                 </Card>
@@ -1262,7 +1286,7 @@ export const Reports: React.FC = () => {
             )
           }
           // ================= SALE DETAIL TAB =================
-          ,{
+          /*, {
             key: 'sale-detail',
             label: (
               <span>
@@ -1272,7 +1296,6 @@ export const Reports: React.FC = () => {
             ),
             children: (
               <Spin spinning={loading}>
-                {/* KPI Strip */}
                 <Row gutter={[16, 16]} style={{ marginBottom: '20px' }}>
                   <Col xs={24} sm={12} md={6}>
                     <Card className="glass-card" variant="borderless">
@@ -1280,7 +1303,7 @@ export const Reports: React.FC = () => {
                         title="Total Line Items"
                         value={saleDetail.length}
                         prefix={<FileTextOutlined style={{ color: '#8B5CF6' }} />}
-                        valueStyle={{ color: '#8B5CF6', fontWeight: 700 }}
+                        styles={{ content: { color: '#8B5CF6', fontWeight: 700 } }}
                       />
                     </Card>
                   </Col>
@@ -1290,7 +1313,7 @@ export const Reports: React.FC = () => {
                         title="Unique Invoices"
                         value={new Set(saleDetail.map((r: any) => r.invoiceId)).size}
                         prefix={<ShoppingCartOutlined style={{ color: '#06B6D4' }} />}
-                        valueStyle={{ color: '#06B6D4', fontWeight: 700 }}
+                        styles={{ content: { color: '#06B6D4', fontWeight: 700 } }}
                       />
                     </Card>
                   </Col>
@@ -1301,7 +1324,7 @@ export const Reports: React.FC = () => {
                         value={saleDetail.reduce((s: number, r: any) => s + r.amount, 0)}
                         formatter={(v: any) => Number(v).toLocaleString()}
                         prefix={<DollarOutlined style={{ color: '#10B981' }} />}
-                        valueStyle={{ color: '#10B981', fontWeight: 700 }}
+                        styles={{ content: { color: '#10B981', fontWeight: 700 } }}
                       />
                     </Card>
                   </Col>
@@ -1312,13 +1335,12 @@ export const Reports: React.FC = () => {
                         value={saleDetail.reduce((s: number, r: any) => s + r.discount, 0)}
                         formatter={(v: any) => Number(v).toLocaleString()}
                         prefix={<PercentageOutlined style={{ color: '#F59E0B' }} />}
-                        valueStyle={{ color: '#F59E0B', fontWeight: 700 }}
+                        styles={{ content: { color: '#F59E0B', fontWeight: 700 } }}
                       />
                     </Card>
                   </Col>
                 </Row>
 
-                {/* Export Button + Table */}
                 <Card
                   className="glass-card"
                   variant="borderless"
@@ -1342,45 +1364,79 @@ export const Reports: React.FC = () => {
                     pagination={{ pageSize: 50, showSizeChanger: true, showTotal: (t) => `${t} line items` }}
                     columns={[
                       { title: 'No', dataIndex: 'no', key: 'no', width: 55, fixed: 'left' },
-                      { title: 'Invoice ID', dataIndex: 'invoiceId', key: 'invoiceId', width: 130, fixed: 'left',
-                        render: (v: string) => <Typography.Text code style={{ fontWeight: 600 }}>{v}</Typography.Text> },
-                      { title: 'Invoice Date', dataIndex: 'invoiceDate', key: 'invoiceDate', width: 110,
-                        render: (v: string) => <Tag color="blue">{v}</Tag> },
+                      {
+                        title: 'Invoice ID', dataIndex: 'invoiceId', key: 'invoiceId', width: 130, fixed: 'left',
+                        render: (v: string) => <Typography.Text code style={{ fontWeight: 600 }}>{v}</Typography.Text>
+                      },
+                      {
+                        title: 'Invoice Date', dataIndex: 'invoiceDate', key: 'invoiceDate', width: 110,
+                        render: (v: string) => <Tag color="blue">{v}</Tag>
+                      },
                       { title: 'Customer ID', dataIndex: 'customerId', key: 'customerId', width: 110 },
-                      { title: 'Customer Name', dataIndex: 'customerName', key: 'customerName', width: 200,
-                        render: (v: string) => <Typography.Text ellipsis={{ tooltip: v }} style={{ maxWidth: 190 }}>{v}</Typography.Text> },
-                      { title: 'Stock ID', dataIndex: 'stockId', key: 'stockId', width: 150,
-                        render: (v: string) => <Typography.Text code>{v}</Typography.Text> },
-                      { title: 'Stock Name', dataIndex: 'stockName', key: 'stockName', width: 200,
-                        render: (v: string) => <Typography.Text ellipsis={{ tooltip: v }} style={{ maxWidth: 190 }}>{v}</Typography.Text> },
+                      {
+                        title: 'Customer Name', dataIndex: 'customerName', key: 'customerName', width: 200,
+                        render: (v: string) => <Typography.Text ellipsis={{ tooltip: v }} style={{ maxWidth: 190 }}>{v}</Typography.Text>
+                      },
+                      {
+                        title: 'Stock ID', dataIndex: 'stockId', key: 'stockId', width: 150,
+                        render: (v: string) => <Typography.Text code>{v}</Typography.Text>
+                      },
+                      {
+                        title: 'Stock Name', dataIndex: 'stockName', key: 'stockName', width: 200,
+                        render: (v: string) => <Typography.Text ellipsis={{ tooltip: v }} style={{ maxWidth: 190 }}>{v}</Typography.Text>
+                      },
                       { title: 'Cur', dataIndex: 'curId', key: 'curId', width: 60 },
-                      { title: 'Qty', dataIndex: 'quantity', key: 'quantity', width: 70,
-                        render: (v: number) => <Typography.Text strong>{v}</Typography.Text> },
+                      {
+                        title: 'Qty', dataIndex: 'quantity', key: 'quantity', width: 70,
+                        render: (v: number) => <Typography.Text strong>{v}</Typography.Text>
+                      },
                       { title: 'UOM', dataIndex: 'umId', key: 'umId', width: 70 },
-                      { title: 'Price', dataIndex: 'price', key: 'price', width: 110,
-                        render: (v: number) => v.toLocaleString() },
-                      { title: 'Total Amt', dataIndex: 'totalAmount', key: 'totalAmount', width: 120,
-                        render: (v: number) => v.toLocaleString() },
-                      { title: 'Disc%', dataIndex: 'discountPct', key: 'discountPct', width: 75,
-                        render: (v: number) => `${v}%` },
-                      { title: 'Discount', dataIndex: 'discount', key: 'discount', width: 100,
-                        render: (v: number) => v.toLocaleString() },
-                      { title: 'Net Price', dataIndex: 'netPrice', key: 'netPrice', width: 110,
-                        render: (v: number) => v.toLocaleString() },
-                      { title: 'Amount', dataIndex: 'amount', key: 'amount', width: 120,
-                        render: (v: number) => <Typography.Text strong style={{ color: '#8B5CF6' }}>{v.toLocaleString()}</Typography.Text> },
-                      { title: 'Tax', dataIndex: 'tax', key: 'tax', width: 90,
-                        render: (v: number) => v.toLocaleString() },
-                      { title: 'Net Amount', dataIndex: 'netAmount', key: 'netAmount', width: 120,
-                        render: (v: number) => <Typography.Text strong style={{ color: '#10B981' }}>{v.toLocaleString()}</Typography.Text> },
-                      { title: 'Paid Amt', dataIndex: 'paidAmount', key: 'paidAmount', width: 110,
-                        render: (v: number) => v > 0 ? <Tag color="green">{v.toLocaleString()}</Tag> : <Tag color="orange">Unpaid</Tag> },
+                      {
+                        title: 'Price', dataIndex: 'price', key: 'price', width: 110,
+                        render: (v: number) => v.toLocaleString()
+                      },
+                      {
+                        title: 'Total Amt', dataIndex: 'totalAmount', key: 'totalAmount', width: 120,
+                        render: (v: number) => v.toLocaleString()
+                      },
+                      {
+                        title: 'Disc%', dataIndex: 'discountPct', key: 'discountPct', width: 75,
+                        render: (v: number) => `${v}%`
+                      },
+                      {
+                        title: 'Discount', dataIndex: 'discount', key: 'discount', width: 100,
+                        render: (v: number) => v.toLocaleString()
+                      },
+                      {
+                        title: 'Net Price', dataIndex: 'netPrice', key: 'netPrice', width: 110,
+                        render: (v: number) => v.toLocaleString()
+                      },
+                      {
+                        title: 'Amount', dataIndex: 'amount', key: 'amount', width: 120,
+                        render: (v: number) => <Typography.Text strong style={{ color: '#8B5CF6' }}>{v.toLocaleString()}</Typography.Text>
+                      },
+                      {
+                        title: 'Tax', dataIndex: 'tax', key: 'tax', width: 90,
+                        render: (v: number) => v.toLocaleString()
+                      },
+                      {
+                        title: 'Net Amount', dataIndex: 'netAmount', key: 'netAmount', width: 120,
+                        render: (v: number) => <Typography.Text strong style={{ color: '#10B981' }}>{v.toLocaleString()}</Typography.Text>
+                      },
+                      {
+                        title: 'Paid Amt', dataIndex: 'paidAmount', key: 'paidAmount', width: 110,
+                        render: (v: number) => v > 0 ? <Tag color="green">{v.toLocaleString()}</Tag> : <Tag color="orange">Unpaid</Tag>
+                      },
                       { title: 'Staff', dataIndex: 'staff', key: 'staff', width: 160 },
                       { title: 'Remark', dataIndex: 'remark', key: 'remark', width: 120 },
-                      { title: 'Category', dataIndex: 'category', key: 'category', width: 120,
-                        render: (v: string) => v ? <Tag color="purple">{v}</Tag> : null },
-                      { title: 'Business Unit', dataIndex: 'businessUnit', key: 'businessUnit', width: 140,
-                        render: (v: string) => v ? <Tag color="cyan">{v}</Tag> : null },
+                      {
+                        title: 'Category', dataIndex: 'category', key: 'category', width: 120,
+                        render: (v: string) => v ? <Tag color="purple">{v}</Tag> : null
+                      },
+                      {
+                        title: 'Business Unit', dataIndex: 'businessUnit', key: 'businessUnit', width: 140,
+                        render: (v: string) => v ? <Tag color="cyan">{v}</Tag> : null
+                      },
                     ]}
                     summary={(pageData) => {
                       const sumQty = pageData.reduce((s, r) => s + r.quantity, 0);
@@ -1408,9 +1464,9 @@ export const Reports: React.FC = () => {
                 </Card>
               </Spin>
             )
-          }
+          }*/
           // ================= SALES REP KPI TAB =================
-          ,{
+          , {
             key: 'kpi',
             label: (
               <span>
@@ -1436,7 +1492,7 @@ export const Reports: React.FC = () => {
                       <Statistic
                         title="Top Performer"
                         value={kpiData[0]?.salesRepName || 'N/A'}
-                        valueStyle={{ fontSize: '18px', fontWeight: 700 }}
+                        styles={{ content: { fontSize: '18px', fontWeight: 700 } }}
                         prefix={<DollarOutlined style={{ color: '#10B981' }} />}
                       />
                     </Card>
@@ -1454,8 +1510,8 @@ export const Reports: React.FC = () => {
                 </Row>
 
                 {/* Chart & Table */}
-                <Row gutter={[16, 16]}>
-                  <Col xs={24} lg={12}>
+                <Row gutter={[16, 24]}>
+                  <Col xs={24}>
                     <Card title="Sales Revenue by Representative" className="glass-card" variant="borderless">
                       <div style={{ height: 350 }}>
                         {kpiData.length > 0 ? (
@@ -1482,7 +1538,7 @@ export const Reports: React.FC = () => {
                     </Card>
                   </Col>
 
-                  <Col xs={24} lg={12}>
+                  <Col xs={24}>
                     <Card
                       title="Representative Rankings"
                       className="glass-card"
@@ -1491,15 +1547,60 @@ export const Reports: React.FC = () => {
                     >
                       <Table
                         dataSource={kpiData.map((item, idx) => ({ ...item, key: idx, rank: idx + 1 }))}
-                        pagination={{ pageSize: 5 }}
+                        pagination={{ pageSize: 10 }}
                         size="middle"
+                        expandable={{
+                          expandedRowRender: (record: any) => (
+                            <div style={{ padding: '16px', background: '#fafafa', borderRadius: '8px', margin: '0 16px' }}>
+                              <Row gutter={[16, 16]}>
+                                {/* Sales Summary */}
+                                <Col xs={24} md={12} lg={6}>
+                                  <Card size="small" title={<span style={{ color: '#10B981' }}><DollarOutlined /> Sales Summary</span>} bordered={true}>
+                                    <p><strong>Gross Sales:</strong> {record.grossSales?.toLocaleString()} {CURRENCY.symbol}</p>
+                                    <p><strong>Net Sales:</strong> <span style={{ color: '#10B981', fontWeight: 'bold' }}>{record.netSales?.toLocaleString()} {CURRENCY.symbol}</span></p>
+                                    <p><strong>Avg Order:</strong> {record.averageOrderValue?.toLocaleString()} {CURRENCY.symbol}</p>
+                                    <p><strong>Avg/Customer:</strong> {record.averageSalesPerCustomer?.toLocaleString()} {CURRENCY.symbol}</p>
+                                  </Card>
+                                </Col>
+                                {/* Discount Breakdown */}
+                                <Col xs={24} md={12} lg={6}>
+                                  <Card size="small" title={<span style={{ color: '#F59E0B' }}><PercentageOutlined /> Discount Breakdown</span>} bordered={true}>
+                                    <p><strong>Promo Disc:</strong> {record.promoDiscount?.toLocaleString()} {CURRENCY.symbol}</p>
+                                    <p><strong>Manual Disc:</strong> {record.manualDiscount?.toLocaleString()} {CURRENCY.symbol}</p>
+                                    <p><strong>COD Disc:</strong> {record.codDiscount?.toLocaleString()} {CURRENCY.symbol}</p>
+                                    <p><strong>Total Disc:</strong> <span style={{ color: '#F59E0B', fontWeight: 'bold' }}>{record.totalDiscount?.toLocaleString()} {CURRENCY.symbol}</span></p>
+                                  </Card>
+                                </Col>
+                                {/* Product Movement */}
+                                <Col xs={24} md={12} lg={6}>
+                                  <Card size="small" title={<span style={{ color: '#8B5CF6' }}><ShoppingCartOutlined /> Product Movement</span>} bordered={true}>
+                                    <p><strong>Charge Qty:</strong> {record.chargeQty?.toLocaleString()}</p>
+                                    <p><strong>FOC Qty:</strong> {record.focQty?.toLocaleString()}</p>
+                                    <p><strong>Sample Qty:</strong> {record.sampleQty?.toLocaleString()}</p>
+                                    <p><strong>Total Items:</strong> {(record.chargeQty + record.focQty + record.sampleQty)?.toLocaleString()}</p>
+                                  </Card>
+                                </Col>
+                                {/* Collection Status */}
+                                <Col xs={24} md={12} lg={6}>
+                                  <Card size="small" title={<span style={{ color: '#3B82F6' }}><CheckCircleOutlined /> Collection & Customers</span>} bordered={true}>
+                                    <p><strong>Paid Amount:</strong> <span style={{ color: '#3B82F6' }}>{record.paidAmount?.toLocaleString()} {CURRENCY.symbol}</span></p>
+                                    <p><strong>Outstanding:</strong> <span style={{ color: '#EF4444', fontWeight: 'bold' }}>{record.outstandingAmount?.toLocaleString()} {CURRENCY.symbol}</span></p>
+                                    <p><strong>Collection Rate:</strong> {record.netSales > 0 ? ((record.paidAmount / record.netSales) * 100).toFixed(1) : 0}%</p>
+                                    <p><strong>New Customers:</strong> {record.newCustomers}</p>
+                                  </Card>
+                                </Col>
+                              </Row>
+                            </div>
+                          ),
+                        }}
                         columns={[
                           { title: 'Rank', dataIndex: 'rank', key: 'rank', width: 60, render: (v) => <Text strong>{v}</Text> },
-                          { title: 'Name', dataIndex: 'salesRepName', key: 'salesRepName', render: (v, r) => <div><Text strong>{v}</Text><br/><Text type="secondary" style={{ fontSize: '11px' }}>{r.salesRepCode}</Text></div> },
+                          { title: 'Name', dataIndex: 'salesRepName', key: 'salesRepName', render: (v, r: any) => <div><Text strong>{v}</Text><br /><Text type="secondary" style={{ fontSize: '11px' }}>{r.salesRepCode}</Text></div> },
                           { title: 'Branch', dataIndex: 'branchName', key: 'branchName' },
-                          { title: 'Total Sales', dataIndex: 'totalSales', key: 'totalSales', render: (v) => <Text strong style={{ color: '#10B981' }}>{v.toLocaleString()} {CURRENCY.symbol}</Text>, sorter: (a, b) => a.totalSales - b.totalSales },
-                          { title: 'AOV', dataIndex: 'averageOrderValue', key: 'averageOrderValue', render: (v) => `${v.toLocaleString()} ${CURRENCY.symbol}` },
-                          { title: 'Customers', dataIndex: 'activeCustomers', key: 'activeCustomers' }
+                          { title: 'Net Sales', dataIndex: 'netSales', key: 'netSales', render: (v) => <Text strong style={{ color: '#10B981' }}>{v?.toLocaleString()} {CURRENCY.symbol}</Text>, sorter: (a: any, b: any) => a.netSales - b.netSales },
+                          { title: 'Orders', dataIndex: 'orderCount', key: 'orderCount', sorter: (a: any, b: any) => a.orderCount - b.orderCount },
+                          { title: 'Customers', dataIndex: 'activeCustomers', key: 'activeCustomers' },
+                          { title: 'Outstanding', dataIndex: 'outstandingAmount', key: 'outstandingAmount', render: (v) => v > 0 ? <Text strong style={{ color: '#EF4444' }}>{v?.toLocaleString()} {CURRENCY.symbol}</Text> : <Text type="secondary">0</Text>, sorter: (a: any, b: any) => a.outstandingAmount - b.outstandingAmount },
                         ]}
                       />
                     </Card>
@@ -1548,7 +1649,7 @@ export const Reports: React.FC = () => {
                         title="Order Discounts Value"
                         value={marketingData?.promoSummary?.totalOrderPromoDiscounts || 0}
                         suffix={CURRENCY.symbol}
-                        valueStyle={{ color: '#8B5CF6', fontWeight: 700 }}
+                        styles={{ content: { color: '#8B5CF6', fontWeight: 700 } }}
                         prefix={<PercentageOutlined />}
                       />
                     </Card>
@@ -1559,7 +1660,7 @@ export const Reports: React.FC = () => {
                         title="Free Products Value"
                         value={marketingData?.promoSummary?.totalFreeGiftsValue || 0}
                         suffix={CURRENCY.symbol}
-                        valueStyle={{ color: '#F59E0B', fontWeight: 700 }}
+                        styles={{ content: { color: '#F59E0B', fontWeight: 700 } }}
                         prefix={<ShoppingCartOutlined />}
                       />
                     </Card>
@@ -1570,7 +1671,7 @@ export const Reports: React.FC = () => {
                         title="Total Promo Investment"
                         value={marketingData?.promoSummary?.totalPromoValue || 0}
                         suffix={CURRENCY.symbol}
-                        valueStyle={{ color: '#10B981', fontWeight: 900 }}
+                        styles={{ content: { color: '#10B981', fontWeight: 900 } }}
                         prefix={<DollarOutlined />}
                       />
                     </Card>

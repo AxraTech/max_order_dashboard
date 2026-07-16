@@ -34,6 +34,7 @@ interface PromotionRecord {
   tiers: Array<{ buyQty: number; freeQty: number }> | null;
   minOrderAmount: number | null;
   discountAmount: number | null;
+  discountPercentage: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -52,6 +53,7 @@ export const Promotions: React.FC = () => {
   const [editingPromo, setEditingPromo] = useState<PromotionRecord | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [promoType, setPromoType] = useState<'BUY_N_GET_M' | 'ORDER_THRESHOLD_DISCOUNT'>('BUY_N_GET_M');
+  const [discountType, setDiscountType] = useState<'FLAT' | 'PERCENTAGE'>('FLAT');
   const [form] = Form.useForm();
 
   // Detail Modal
@@ -92,9 +94,11 @@ export const Promotions: React.FC = () => {
   const openCreateModal = () => {
     setEditingPromo(null);
     setPromoType('BUY_N_GET_M');
+    setDiscountType('FLAT');
     form.resetFields();
     form.setFieldsValue({
       type: 'BUY_N_GET_M',
+      discountType: 'FLAT',
       startDate: dayjs(),
       isActive: true,
       tiers: [{ buyQty: 10, freeQty: 1 }],
@@ -105,17 +109,21 @@ export const Promotions: React.FC = () => {
   const openEditModal = (record: PromotionRecord) => {
     setEditingPromo(record);
     setPromoType(record.type);
+    const calculatedType = record.discountPercentage ? 'PERCENTAGE' : 'FLAT';
+    setDiscountType(calculatedType);
     form.resetFields();
     form.setFieldsValue({
       name: record.name,
       description: record.description,
       type: record.type,
+      discountType: calculatedType,
       startDate: dayjs(record.startDate),
       endDate: record.endDate ? dayjs(record.endDate) : null,
       productId: record.productId,
       tiers: record.tiers && record.tiers.length > 0 ? record.tiers : [{ buyQty: record.buyQty, freeQty: record.freeQty }],
       minOrderAmount: record.minOrderAmount,
       discountAmount: record.discountAmount,
+      discountPercentage: record.discountPercentage,
       isActive: record.isActive,
     });
     setIsModalOpen(true);
@@ -133,6 +141,8 @@ export const Promotions: React.FC = () => {
         ...values,
         startDate: values.startDate.toISOString(),
         endDate: values.endDate ? values.endDate.toISOString() : null,
+        discountAmount: values.type === 'ORDER_THRESHOLD_DISCOUNT' && values.discountType === 'FLAT' ? values.discountAmount : null,
+        discountPercentage: values.type === 'ORDER_THRESHOLD_DISCOUNT' && values.discountType === 'PERCENTAGE' ? values.discountPercentage : null,
       };
 
       if (editingPromo) {
@@ -253,9 +263,15 @@ export const Promotions: React.FC = () => {
           <div>
             <Text strong>Min Purchase: {record.minOrderAmount?.toLocaleString()} MMK</Text>
             <br />
-            <Text type="secondary" style={{ fontSize: '12px', color: '#10B981' }}>
-              Discount: -{record.discountAmount?.toLocaleString()} MMK
-            </Text>
+            {record.discountPercentage !== null && record.discountPercentage !== undefined ? (
+              <Text type="secondary" style={{ fontSize: '12px', color: '#10B981', fontWeight: 600 }}>
+                Discount: -{record.discountPercentage}%
+              </Text>
+            ) : (
+              <Text type="secondary" style={{ fontSize: '12px', color: '#10B981' }}>
+                Discount: -{record.discountAmount?.toLocaleString()} MMK
+              </Text>
+            )}
           </div>
         );
       },
@@ -427,7 +443,11 @@ export const Promotions: React.FC = () => {
             ) : (
               <>
                 <Descriptions.Item label="Min Order Value">{detailPromo.minOrderAmount?.toLocaleString()} MMK</Descriptions.Item>
-                <Descriptions.Item label="Discount Amount">{detailPromo.discountAmount?.toLocaleString()} MMK</Descriptions.Item>
+                {detailPromo.discountPercentage !== null && detailPromo.discountPercentage !== undefined ? (
+                  <Descriptions.Item label="Discount Percentage">{detailPromo.discountPercentage}%</Descriptions.Item>
+                ) : (
+                  <Descriptions.Item label="Discount Amount">{detailPromo.discountAmount?.toLocaleString()} MMK</Descriptions.Item>
+                )}
               </>
             )}
           </Descriptions>
@@ -590,6 +610,19 @@ export const Promotions: React.FC = () => {
               </>
             ) : (
               <>
+                <Col span={24}>
+                  <Form.Item
+                    name="discountType"
+                    label="Discount Method"
+                    rules={[{ required: true }]}
+                  >
+                    <Select onChange={(value: 'FLAT' | 'PERCENTAGE') => setDiscountType(value)}>
+                      <Select.Option value="FLAT">Flat Amount (MMK)</Select.Option>
+                      <Select.Option value="PERCENTAGE">Percentage (%)</Select.Option>
+                    </Select>
+                  </Form.Item>
+                </Col>
+
                 <Col span={12}>
                   <Form.Item
                     name="minOrderAmount"
@@ -599,26 +632,49 @@ export const Promotions: React.FC = () => {
                     <InputNumber
                       min={1}
                       style={{ width: '100%', borderRadius: '12px' }}
-                      placeholder="e.g. 1,000,000"
+                      placeholder="e.g. 100,000"
                       formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                      parser={value => value!.replace(/\$\s?|(,*)/g, '')}
                     />
                   </Form.Item>
                 </Col>
                 
-                <Col span={12}>
-                  <Form.Item
-                    name="discountAmount"
-                    label="Discount Amount (MMK)"
-                    rules={[{ required: true, message: 'Please specify discount amount' }]}
-                  >
-                    <InputNumber
-                      min={1}
-                      style={{ width: '100%', borderRadius: '12px' }}
-                      placeholder="e.g. 10,000"
-                      formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-                    />
-                  </Form.Item>
-                </Col>
+                {discountType === 'FLAT' ? (
+                  <Col span={12}>
+                    <Form.Item
+                      name="discountAmount"
+                      label="Discount Amount (MMK)"
+                      rules={[{ required: true, message: 'Please specify discount amount' }]}
+                    >
+                      <InputNumber
+                        min={1}
+                        style={{ width: '100%', borderRadius: '12px' }}
+                        placeholder="e.g. 10,000"
+                        formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                        parser={value => value!.replace(/\$\s?|(,*)/g, '')}
+                      />
+                    </Form.Item>
+                  </Col>
+                ) : (
+                  <Col span={12}>
+                    <Form.Item
+                      name="discountPercentage"
+                      label="Discount Percentage (%)"
+                      rules={[
+                        { required: true, message: 'Please specify discount percentage' },
+                        { type: 'number', min: 0.01, max: 100, message: 'Percentage must be between 0.01 and 100' }
+                      ]}
+                    >
+                      <InputNumber
+                        min={0.01}
+                        max={100}
+                        step={0.1}
+                        style={{ width: '100%', borderRadius: '12px' }}
+                        placeholder="e.g. 10"
+                      />
+                    </Form.Item>
+                  </Col>
+                )}
               </>
             )}
           </Row>

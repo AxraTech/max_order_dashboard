@@ -1,15 +1,16 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
-  Card, Typography, Table, Tag, Space, Button, Modal,
+  Card, Typography, Table, Tag, Space, Button, Modal, Dropdown,
   Descriptions, Timeline, Empty, Input, Select, message, Popconfirm,
 } from 'antd';
 import {
   SearchOutlined, ReloadOutlined, EyeOutlined, CloseCircleOutlined,
-  CheckCircleOutlined,
+  CheckCircleOutlined, MoreOutlined,
 } from '@ant-design/icons';
 import { api } from '../../services/api';
 import { CURRENCY } from '../../types/index';
 import type { OrderStatus } from '../../types/index';
+import { useAuthStore } from '../../store/auth.store';
 
 const { Title, Text } = Typography;
 
@@ -31,7 +32,9 @@ interface OrderRecord {
   orderDate: string; totalAmount: number; subtotal: number; tax: number;
   discount: number; notes: string | null;
   manualDiscount?: number | null;
+  cashDownDiscount?: number | null;
   cashback?: number | null;
+  partnerCommission?: number | null;
   paymentAmount?: number | null;
   paymentMethod?: string | null;
   paymentReference?: string | null;
@@ -54,6 +57,7 @@ export const Orders: React.FC = () => {
   const [detailOrder, setDetailOrder] = useState<OrderRecord | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
+  const { user } = useAuthStore();
 
   const fetchOrders = useCallback(async () => {
     try {
@@ -173,34 +177,75 @@ export const Orders: React.FC = () => {
     {
       title: 'Actions',
       key: 'actions',
-      width: 160,
-      render: (_: any, r: OrderRecord) => (
-        <Space size="small">
-          <Button type="link" icon={<EyeOutlined />} onClick={() => handleViewDetail(r.id)} style={{ padding: 0 }}>
-            View
-          </Button>
-          {['SUBMITTED', 'PENDING'].includes(r.status) && (
-            <Popconfirm
-              title="Approve this order?"
-              onConfirm={() => handleStatusTransition(r.id, 'APPROVED', 'Approved by admin')}
-              okText="Approve"
-            >
-              <Button type="link" icon={<CheckCircleOutlined />} style={{ padding: 0, color: '#10B981' }}>
-                Approve
-              </Button>
-            </Popconfirm>
-          )}
-          {['SUBMITTED', 'DRAFT', 'PENDING'].includes(r.status) && (
-            <Popconfirm
-              title="Cancel this order?"
-              onConfirm={() => handleStatusTransition(r.id, 'CANCELLED', 'Cancelled by admin')}
-              okText="Yes" okButtonProps={{ danger: true }}
-            >
-              <Button type="link" danger icon={<CloseCircleOutlined />} style={{ padding: 0 }}>Cancel</Button>
-            </Popconfirm>
-          )}
-        </Space>
-      ),
+      width: 100,
+      render: (_: any, r: OrderRecord) => {
+        const items: Array<{ key: string; label: React.ReactNode; icon?: React.ReactNode; danger?: boolean }> = [];
+        items.push({ key: 'view', icon: <EyeOutlined />, label: 'View Details' });
+        
+        if (['SUBMITTED', 'PENDING'].includes(r.status)) {
+          if (user?.role?.name === 'SUPER_ADMIN' || user?.role?.name === 'HQ_MANAGER' || user?.role?.name === 'PURCHASE_ORDER') {
+            items.push({ key: 'po_accept', icon: <CheckCircleOutlined />, label: 'Action By PO' });
+          }
+          if (user?.role?.name === 'BRANCH_MANAGER') {
+            items.push({ key: 'bm_accept', icon: <CheckCircleOutlined />, label: 'Action By Branch Manager' });
+          }
+        }
+        
+        if (r.status === 'FINANCE_REVIEW') {
+          if (user?.role?.name === 'SUPER_ADMIN' || user?.role?.name === 'FINANCE_OFFICER' || user?.role?.name === 'HQ_MANAGER' || user?.role?.name === 'BRANCH_MANAGER') {
+            items.push({ key: 'finance_approve', icon: <CheckCircleOutlined />, label: 'Action By Finance' });
+          }
+        }
+        
+        if (['SUBMITTED', 'DRAFT', 'PENDING'].includes(r.status)) {
+          items.push({ key: 'cancel', icon: <CloseCircleOutlined />, label: 'Cancel Order', danger: true });
+        }
+
+        const onMenuClick = ({ key }: { key: string }) => {
+          switch (key) {
+            case 'view':
+              handleViewDetail(r.id);
+              break;
+            case 'po_accept':
+            case 'bm_accept':
+              Modal.confirm({
+                title: 'Accept order and send to Finance?',
+                content: 'This will move the order to finance review.',
+                okText: 'Accept',
+                cancelText: 'Cancel',
+                onOk: () => handleStatusTransition(r.id, 'FINANCE_REVIEW', 'Accepted, pending Finance'),
+              });
+              break;
+            case 'finance_approve':
+              Modal.confirm({
+                title: 'Approve order and generate Invoice?',
+                content: 'This will finalize the order and generate an invoice.',
+                okText: 'Approve',
+                cancelText: 'Cancel',
+                onOk: () => handleStatusTransition(r.id, 'APPROVED', 'Approved by Finance'),
+              });
+              break;
+            case 'cancel':
+              Modal.confirm({
+                title: 'Cancel this order?',
+                content: 'Are you sure you want to cancel this order?',
+                okText: 'Yes, Cancel',
+                okType: 'danger',
+                cancelText: 'No',
+                onOk: () => handleStatusTransition(r.id, 'CANCELLED', 'Cancelled by admin'),
+              });
+              break;
+          }
+        };
+
+        return (
+          <Dropdown menu={{ items, onClick: onMenuClick }} trigger={['click']}>
+            <Button icon={<MoreOutlined />} style={{ borderRadius: '10px', fontSize: '13px' }}>
+              Actions
+            </Button>
+          </Dropdown>
+        );
+      },
     },
   ];
 
@@ -273,14 +318,37 @@ export const Orders: React.FC = () => {
         footer={
           detailOrder ? (
             <Space>
-              {['SUBMITTED', 'PENDING'].includes(detailOrder.status) && (
+              {['SUBMITTED', 'PENDING'].includes(detailOrder.status) &&
+               ['SUPER_ADMIN', 'HQ_MANAGER', 'PURCHASE_ORDER'].includes(user?.role?.name || '') && (
                 <Button
                   type="primary"
                   icon={<CheckCircleOutlined />}
                   loading={actionLoading}
-                  onClick={() => handleStatusTransition(detailOrder.id, 'APPROVED', 'Approved by admin')}
+                  onClick={() => handleStatusTransition(detailOrder.id, 'FINANCE_REVIEW', 'Accepted, pending Finance')}
                 >
-                  Approve Order
+                  Accept Order (PO)
+                </Button>
+              )}
+              {['SUBMITTED', 'PENDING'].includes(detailOrder.status) &&
+               user?.role?.name === 'BRANCH_MANAGER' && (
+                <Button
+                  type="primary"
+                  icon={<CheckCircleOutlined />}
+                  loading={actionLoading}
+                  onClick={() => handleStatusTransition(detailOrder.id, 'FINANCE_REVIEW', 'Accepted, pending Finance')}
+                >
+                  Accept Order (BM)
+                </Button>
+              )}
+              {detailOrder.status === 'FINANCE_REVIEW' &&
+               ['SUPER_ADMIN', 'HQ_MANAGER', 'FINANCE_OFFICER', 'BRANCH_MANAGER'].includes(user?.role?.name || '') && (
+                <Button
+                  type="primary"
+                  icon={<CheckCircleOutlined />}
+                  loading={actionLoading}
+                  onClick={() => handleStatusTransition(detailOrder.id, 'APPROVED', 'Approved by Finance')}
+                >
+                  Approve Order (Finance)
                 </Button>
               )}
               {['SUBMITTED', 'DRAFT', 'PENDING'].includes(detailOrder.status) && (
@@ -318,10 +386,20 @@ export const Orders: React.FC = () => {
                   -{Math.round(Number(detailOrder.manualDiscount)).toLocaleString()} {CURRENCY.symbol}
                 </Descriptions.Item>
               )}
+              {Number(detailOrder.cashDownDiscount || 0) > 0 && (
+                <Descriptions.Item label="Cash Down Discount">
+                  -{Math.round(Number(detailOrder.cashDownDiscount)).toLocaleString()} {CURRENCY.symbol}
+                </Descriptions.Item>
+              )}
               <Descriptions.Item label="Tax">{Math.round(Number(detailOrder.tax)).toLocaleString()} {CURRENCY.symbol}</Descriptions.Item>
               {Number(detailOrder.cashback || 0) > 0 && (
                 <Descriptions.Item label="Cashback">
                   -{Math.round(Number(detailOrder.cashback)).toLocaleString()} {CURRENCY.symbol}
+                </Descriptions.Item>
+              )}
+              {Number(detailOrder.partnerCommission || 0) > 0 && (
+                <Descriptions.Item label="Partner Coms">
+                  -{Math.round(Number(detailOrder.partnerCommission)).toLocaleString()} {CURRENCY.symbol}
                 </Descriptions.Item>
               )}
               <Descriptions.Item label="Total">
@@ -332,16 +410,7 @@ export const Orders: React.FC = () => {
               <Descriptions.Item label="Status">
                 <Tag color={STATUS_COLOR[detailOrder.status]}>{detailOrder.status.replace(/_/g, ' ')}</Tag>
               </Descriptions.Item>
-              {detailOrder.paymentAmount && (
-                <Descriptions.Item label="Recorded Payment" span={2}>
-                  <Text strong style={{ color: '#10B981' }}>
-                    {Number(detailOrder.paymentAmount).toLocaleString()} {CURRENCY.symbol}
-                  </Text>
-                  {detailOrder.paymentMethod && <Text type="secondary"> ({detailOrder.paymentMethod.replace(/_/g, ' ')})</Text>}
-                  {detailOrder.paymentReference && <Text type="secondary"> · Ref: {detailOrder.paymentReference}</Text>}
-                  {detailOrder.paymentNotes && <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '2px' }}>Notes: {detailOrder.paymentNotes}</div>}
-                </Descriptions.Item>
-              )}
+
               {detailOrder.notes && <Descriptions.Item label="Notes" span={2}>{detailOrder.notes}</Descriptions.Item>}
             </Descriptions>
 
@@ -417,6 +486,28 @@ export const Orders: React.FC = () => {
                 />
               );
             })()}
+
+            {detailOrder.paymentAmount && (
+              <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '8px', padding: '12px 16px', marginBottom: '20px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Text strong style={{ fontSize: '14px', color: '#065f46' }}>Recorded Payment</Text>
+                  <Text strong style={{ fontSize: '16px', color: '#059669' }}>
+                    {Number(detailOrder.paymentAmount).toLocaleString()} {CURRENCY.symbol}
+                  </Text>
+                </div>
+                {detailOrder.paymentMethod && (
+                  <div style={{ marginTop: '4px' }}>
+                    <Text type="secondary">Method: {detailOrder.paymentMethod.replace(/_/g, ' ')}</Text>
+                    {detailOrder.paymentReference && <Text type="secondary"> · Ref: {detailOrder.paymentReference}</Text>}
+                  </div>
+                )}
+                {detailOrder.paymentNotes && (
+                  <div style={{ fontSize: '13px', color: '#065f46', marginTop: '8px', padding: '6px 8px', background: '#d1fae5', borderRadius: '4px' }}>
+                    <Text strong style={{ marginRight: '4px' }}>Notes:</Text> {detailOrder.paymentNotes}
+                  </div>
+                )}
+              </div>
+            )}
 
             {detailOrder.statusHistory?.length > 0 && (
               <>

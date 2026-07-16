@@ -5,7 +5,7 @@ import { api } from '../../services/api';
 import dayjs from 'dayjs';
 import * as XLSX from 'xlsx';
 import { jsPDF } from 'jspdf';
-import 'jspdf-autotable';
+import autoTable from 'jspdf-autotable';
 
 const { Title, Text } = Typography;
 
@@ -317,7 +317,7 @@ export const Inventory: React.FC = () => {
         }
       });
 
-      (doc as any).autoTable({
+      autoTable(doc, {
         head: [tableColumn],
         body: tableRows,
         startY: 26,
@@ -822,6 +822,14 @@ export const Inventory: React.FC = () => {
           >
             Export PDF
           </Button>
+          <Button
+            href="/templates/Inventory_Import_Template.xlsx"
+            target="_blank"
+            icon={<FileExcelOutlined />}
+            style={{ borderRadius: '12px' }}
+          >
+            Template
+          </Button>
           <Upload
             accept=".xlsx"
             showUploadList={false}
@@ -1078,18 +1086,7 @@ export const Inventory: React.FC = () => {
             </Col>
           </Row>
 
-          <Row gutter={16}>
-            <Col span={12}>
-              <Form.Item name="sampleQty" label="Sample Stock (Qty)">
-                <InputNumber min={0} style={{ width: '100%', borderRadius: '8px' }} placeholder="0" />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item name="focQty" label="FOC Stock (Qty)">
-                <InputNumber min={0} style={{ width: '100%', borderRadius: '8px' }} placeholder="0" />
-              </Form.Item>
-            </Col>
-          </Row>
+
 
           <Form.Item
             name="branchIds"
@@ -1219,18 +1216,7 @@ export const Inventory: React.FC = () => {
             </Col>
           </Row>
 
-          <Row gutter={16}>
-            <Col span={12}>
-              <Form.Item name="sampleQty" label="Sample Stock (Qty)">
-                <InputNumber min={0} style={{ width: '100%', borderRadius: '8px' }} placeholder="0" />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item name="focQty" label="FOC Stock (Qty)">
-                <InputNumber min={0} style={{ width: '100%', borderRadius: '8px' }} placeholder="0" />
-              </Form.Item>
-            </Col>
-          </Row>
+
 
           <Form.Item
             name="expiryAlertThreshold"

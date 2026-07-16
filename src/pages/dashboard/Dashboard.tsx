@@ -25,7 +25,7 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../../services/api';
 import { CURRENCY } from '../../types/index';
 
-const { Title } = Typography;
+const { Title, Text } = Typography;
 
 export const Dashboard: React.FC = () => {
   const { user } = useAuthStore();
@@ -38,6 +38,7 @@ export const Dashboard: React.FC = () => {
   const [recentOrders, setRecentOrders] = useState<dashboardApi.RecentOrder[]>([]);
   const [expiryAlerts, setExpiryAlerts] = useState<dashboardApi.ExpiryAlertData | null>(null);
   const [operations, setOperations] = useState<dashboardApi.DashboardOperations | null>(null);
+  const [mustSaleProducts, setMustSaleProducts] = useState<any[]>([]);
   const [branches, setBranches] = useState<any[]>([]);
   const [selectedBranchId, setSelectedBranchId] = useState<string>('all');
   const [dateRange, setDateRange] = useState<[dayjs.Dayjs, dayjs.Dayjs]>([dayjs().subtract(7, 'day'), dayjs()]);
@@ -79,6 +80,11 @@ export const Dashboard: React.FC = () => {
       setRecentOrders(recentRes);
       setExpiryAlerts(alertsRes);
       setOperations(operationsRes);
+      
+      const prodRes = await api.get('/products', { params: { limit: 100 } });
+      if (prodRes.data.success) {
+        setMustSaleProducts(prodRes.data.data.filter((p: any) => p.mustSale));
+      }
     } catch (err) {
       console.error('Failed to load dashboard data:', err);
     } finally {
@@ -383,6 +389,45 @@ export const Dashboard: React.FC = () => {
               )}
             </Row>
           </Space>
+        </Card>
+      )}
+
+      {/* Must Sale Products Section */}
+      {mustSaleProducts.length > 0 && (
+        <Card className="glass-card" variant="borderless" style={{ marginBottom: '24px' }} title={
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ fontSize: '18px', color: '#f59e0b' }}>🔥</span>
+            <span style={{ fontWeight: 700 }}>Must Sale Products Priority List</span>
+          </div>
+        }>
+          <Row gutter={[16, 16]}>
+            {mustSaleProducts.slice(0, 4).map((p: any) => (
+              <Col xs={24} sm={12} md={6} key={p.id}>
+                <Card 
+                  style={{ 
+                    borderRadius: '12px', 
+                    border: '1px solid #FEF3C7', 
+                    background: '#FFFDF5',
+                    height: '100%' 
+                  }}
+                  styles={{ body: { padding: '16px' } }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                    <Tag color="orange" style={{ border: 'none', borderRadius: '6px', fontWeight: 600, fontSize: '10px' }}>MUST SALE</Tag>
+                    <Text type="secondary" style={{ fontSize: '11px' }}>{p.code}</Text>
+                  </div>
+                  <div style={{ fontWeight: 700, fontSize: '14px', color: '#111827', marginBottom: '4px' }}>{p.name}</div>
+                  {p.brandName && <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '8px' }}>{p.brandName}</div>}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '12px' }}>
+                    <span style={{ fontWeight: 800, color: 'var(--primary-color)' }}>
+                      {p.sellingPrice.toLocaleString()} {CURRENCY.symbol}
+                    </span>
+                    <Tag color="blue" style={{ border: 'none', borderRadius: '6px', fontSize: '10px' }}>{p.uom}</Tag>
+                  </div>
+                </Card>
+              </Col>
+            ))}
+          </Row>
         </Card>
       )}
 

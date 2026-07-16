@@ -32,6 +32,12 @@ export interface RoleSummary {
   id: string;
   name: string;
   displayName: string;
+  permissions?: Array<{
+    permission: {
+      module: PermissionModule;
+      action: PermissionAction;
+    }
+  }>;
 }
 
 export type RoleName =

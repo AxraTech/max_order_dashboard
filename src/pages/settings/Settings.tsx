@@ -43,6 +43,12 @@ const SETTING_META: Record<string, {
     unit: 'percent',
     min: 0, max: 100, group: 'Tax & Pricing', placeholder: '2',
   },
+  PARTNER_COMMISSION_RATE: {
+    label: 'Partner Commission Rate',
+    description: 'Commission rate auto-earned by clinic partners on sales transactions.',
+    unit: 'percent',
+    min: 0, max: 100, group: 'Tax & Pricing', placeholder: '5',
+  },
   ORDER_PREFIX: {
     label: 'Order Number Prefix',
     description: 'Prefix for new order numbers (e.g. "ORD" → ORD-123456).',
@@ -223,7 +229,7 @@ export const Settings: React.FC = () => {
                             step={0.1}
                             precision={2}
                             style={{ width: 110 }}
-                            value={editingValues[key] !== undefined ? Number(editingValues[key]) : (current ? Number(current.value) : undefined)}
+                            value={editingValues[key] ? Number(editingValues[key]) : undefined}
                             onChange={val => setEditingValues(s => ({ ...s, [key]: String(val ?? '') }))}
                             disabled={!isSuperAdmin}
                             placeholder={meta.placeholder}

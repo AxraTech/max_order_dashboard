@@ -222,7 +222,7 @@ export const SalesTeams: React.FC = () => {
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 16 }}>
         <div>
-          <Title level={2} style={{ margin: 0, fontWeight: 700 }}>Sales Teams</Title>
+          <Title level={2} style={{ margin: 0, fontWeight: 700 }}>Sale And Marketing Team</Title>
           <Text type="secondary">Organize representatives into teams, assign leaders, and manage branches</Text>
         </div>
         <Space>

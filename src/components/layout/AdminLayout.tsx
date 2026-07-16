@@ -137,7 +137,7 @@ export const AdminLayout: React.FC = () => {
     { key: '/categories', icon: <ShopOutlined />, label: 'Product Categories' },
     { key: '/dealers', icon: <AuditOutlined />, label: 'Dealers' },
     { key: '/sales-reps', icon: <IdcardOutlined />, label: 'Sales Representatives' },
-    { key: '/sales-teams', icon: <TeamOutlined />, label: 'Sales Teams' },
+    { key: '/sales-teams', icon: <TeamOutlined />, label: 'Sale And Marketing Team' },
     { key: '/credit', icon: <CreditCardOutlined />, label: 'Credit Management' },
     { key: '/reports', icon: <BarChartOutlined />, label: 'Reports & Analytics' },
     { key: '/masters', icon: <DatabaseOutlined />, label: 'Masters' },
@@ -145,6 +145,13 @@ export const AdminLayout: React.FC = () => {
     { key: '/audit-logs', icon: <FileSearchOutlined />, label: 'Audit Logs' },
     { key: '/settings', icon: <SettingOutlined />, label: 'Settings' },
   ];
+
+  const hasModuleAccess = (moduleName: string) => {
+    if (!user) return false;
+    if (['SUPER_ADMIN', 'HQ_MANAGER'].includes(user.role.name)) return true;
+    if (!user.role.permissions) return false;
+    return user.role.permissions.some(p => p.permission.module === moduleName);
+  };
 
   // Filter sidebar tabs dynamically based on user role permissions
   const filteredMenuItems = menuItems.filter(item => {
@@ -158,39 +165,36 @@ export const AdminLayout: React.FC = () => {
       case '/dashboard':
         return true;
       case '/orders':
+        return hasModuleAccess('ORDERS');
       case '/sales-returns':
-        return ['BRANCH_MANAGER', 'FINANCE_OFFICER', 'VIEWER_AUDITOR'].includes(role);
+        return hasModuleAccess('RETURNS');
       case '/inventory':
       case '/inventory/transfers':
-        return ['BRANCH_MANAGER', 'INVENTORY_OFFICER', 'VIEWER_AUDITOR'].includes(role);
       case '/purchase-orders':
       case '/delivery':
-        return ['BRANCH_MANAGER', 'INVENTORY_OFFICER'].includes(role);
+        return hasModuleAccess('INVENTORY');
       case '/products':
       case '/promotions':
-        return ['BRANCH_MANAGER', 'INVENTORY_OFFICER', 'FINANCE_OFFICER', 'VIEWER_AUDITOR'].includes(role);
       case '/branches':
-        return ['BRANCH_MANAGER', 'INVENTORY_OFFICER'].includes(role);
+      case '/categories':
+      case '/business-units':
+      case '/masters':
+        return hasModuleAccess('MASTER_DATA');
       case '/invoices':
       case '/customers':
       case '/suppliers':
-      case '/business-units':
-      case '/categories':
       case '/dealers':
-        return ['BRANCH_MANAGER', 'FINANCE_OFFICER', 'VIEWER_AUDITOR'].includes(role);
       case '/sales-reps':
       case '/sales-teams':
-        return ['BRANCH_MANAGER', 'FINANCE_OFFICER'].includes(role);
+        return hasModuleAccess('INVOICING');
       case '/credit':
+        return hasModuleAccess('CREDIT');
       case '/reports':
-        return ['BRANCH_MANAGER', 'FINANCE_OFFICER', 'VIEWER_AUDITOR'].includes(role);
-      case '/masters':
-        return ['BRANCH_MANAGER', 'INVENTORY_OFFICER'].includes(role);
+        return hasModuleAccess('REPORTS');
       case '/administration':
       case '/audit-logs':
-        return false; // Only Admin/HQ can access
       case '/settings':
-        return role === 'SUPER_ADMIN'; // Super Admin only
+        return role === 'SUPER_ADMIN'; // Only Admin can access
       default:
         return true;
     }

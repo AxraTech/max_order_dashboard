@@ -3,6 +3,7 @@ import {
   Card, Typography, Table, Tag, Input, Select, Space, Row, Col,
   Button, Modal, Form, InputNumber, Switch, message, Popconfirm, Tooltip, Descriptions, Badge,
 } from 'antd';
+import type { ColumnsType } from 'antd/es/table';
 import {
   SearchOutlined, PlusOutlined, EyeOutlined, EditOutlined,
   DeleteOutlined, PhoneOutlined, MailOutlined, CheckCircleOutlined,
@@ -53,11 +54,14 @@ interface CustomerRecord {
   email: string | null;
   address: string | null;
   city: string | null;
+  township: string | null;
+  region: string | null;
+  district: string | null;
   category: CustomerCategory;
-  channel: string | null;
+  mainChannel: { id: string, name: string } | null;
+  subChannel: { id: string, name: string } | null;
   paymentTermDays: number;
   isActive: boolean;
-  township: string | null;
   territory: TerritoryInfo | null;
   branch: BranchInfo | null;
   creditLimit: CreditLimitInfo | null;
@@ -80,11 +84,7 @@ export const Customers: React.FC = () => {
   const [customers, setCustomers] = useState<CustomerRecord[]>([]);
   const [territories, setTerritories] = useState<TerritoryInfo[]>([]);
   const [branches, setBranches] = useState<BranchInfo[]>([]);
-
-  // Creatable channel options
-  const DEFAULT_CHANNELS = ['Medical', 'Retail', 'Wholesale'];
-  const [channelOptions, setChannelOptions] = useState<string[]>(DEFAULT_CHANNELS);
-  const [channelSearch, setChannelSearch] = useState('');;
+  const [mainChannels, setMainChannels] = useState<any[]>([]);
 
   // Filters
   const [search, setSearch] = useState('');
@@ -115,6 +115,9 @@ export const Customers: React.FC = () => {
     }).catch(() => {});
     api.get('/branches').then(res => {
       if (res.data.success) setBranches(res.data.data);
+    }).catch(() => {});
+    api.get('/channels/main').then(res => {
+      if (res.data.success) setMainChannels(res.data.data);
     }).catch(() => {});
   }, []);
 
@@ -182,8 +185,11 @@ export const Customers: React.FC = () => {
       address: record.address,
       city: record.city,
       township: record.township,
+      region: record.region,
+      district: record.district,
       category: record.category,
-      channel: record.channel,
+      mainChannelId: record.mainChannel?.id,
+      subChannelId: record.subChannel?.id,
       paymentTermDays: record.paymentTermDays,
       territoryId: record.territory?.id || null,
       branchId: record.branch?.id || null,
@@ -249,7 +255,7 @@ export const Customers: React.FC = () => {
   };
 
   // ---- Table Columns ----
-  const columns = [
+  const columns: ColumnsType<CustomerRecord> = [
     {
       title: 'Code',
       dataIndex: 'code',
@@ -291,19 +297,35 @@ export const Customers: React.FC = () => {
       ),
     },
     {
+      title: 'City',
+      dataIndex: 'city',
+      key: 'city',
+      responsive: ['lg'],
+    },
+    {
       title: 'Township',
       dataIndex: 'township',
       key: 'township',
-      width: 120,
-      render: (tw: string | null) => tw || <Text type="secondary">—</Text>,
+      responsive: ['lg'],
+    },
+    {
+      title: 'Region',
+      dataIndex: 'region',
+      key: 'region',
+      responsive: ['xl'],
+    },
+    {
+      title: 'District',
+      dataIndex: 'district',
+      key: 'district',
+      responsive: ['xl'],
     },
     {
       title: 'Channel',
-      dataIndex: 'channel',
       key: 'channel',
       width: 110,
-      render: (ch: string | null) => ch ? (
-        <Tag color="geekblue" style={{ borderRadius: '8px', border: 'none', fontWeight: 600 }}>{ch}</Tag>
+      render: (_: any, record: CustomerRecord) => record.mainChannel ? (
+        <Tag color="geekblue" style={{ borderRadius: '8px', border: 'none', fontWeight: 600 }}>{record.mainChannel.name}</Tag>
       ) : <Text type="secondary">—</Text>,
     },
     {
@@ -355,6 +377,16 @@ export const Customers: React.FC = () => {
       },
     },
     {
+      title: 'Status',
+      key: 'status',
+      width: 125,
+      render: (_: any, record: CustomerRecord) => (
+        <Tag color={record.isActive ? 'green' : 'orange'} style={{ borderRadius: '8px', border: 'none', fontWeight: 600 }}>
+          {record.isActive ? 'Active' : 'Pending Activation'}
+        </Tag>
+      ),
+    },
+    {
       title: 'Submitted By / SR',
       key: 'salesRep',
       width: 155,
@@ -368,16 +400,6 @@ export const Customers: React.FC = () => {
           </Space>
         );
       }
-    },
-    {
-      title: 'Status',
-      key: 'status',
-      width: 125,
-      render: (_: any, record: CustomerRecord) => (
-        <Tag color={record.isActive ? 'green' : 'orange'} style={{ borderRadius: '8px', border: 'none', fontWeight: 600 }}>
-          {record.isActive ? 'Active' : 'Pending Activation'}
-        </Tag>
-      ),
     },
     {
       title: 'Actions',
@@ -605,19 +627,35 @@ export const Customers: React.FC = () => {
           )}
 
           <Row gutter={16}>
-            <Col span={8}>
+            <Col span={12}>
               <Form.Item name="city" label="City">
                 <Input placeholder="e.g. Yangon" style={{ borderRadius: '8px' }} />
               </Form.Item>
             </Col>
-            <Col span={8}>
+            <Col span={12}>
               <Form.Item name="township" label="Township">
                 <Input placeholder="e.g. Kamayut" style={{ borderRadius: '8px' }} />
               </Form.Item>
             </Col>
-            <Col span={8}>
+          </Row>
+
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item name="region" label="Region">
+                <Input placeholder="e.g. Yangon Region" style={{ borderRadius: '8px' }} />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="district" label="District">
+                <Input placeholder="e.g. West District" style={{ borderRadius: '8px' }} />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Row gutter={16}>
+            <Col span={24}>
               <Form.Item name="address" label="Address">
-                <Input placeholder="Full address" style={{ borderRadius: '8px' }} />
+                <Input.TextArea placeholder="Full address" style={{ borderRadius: '8px' }} rows={2} />
               </Form.Item>
             </Col>
           </Row>
@@ -634,33 +672,43 @@ export const Customers: React.FC = () => {
               </Form.Item>
             </Col>
             <Col span={8}>
-              <Form.Item name="channel" label="Channel">
+              <Form.Item name="mainChannelId" label="Main Channel">
                 <Select
-                  showSearch
                   allowClear
-                  placeholder="Medical, Retail..."
+                  placeholder="Select main channel"
                   style={{ borderRadius: '8px' }}
-                  onSearch={(val) => setChannelSearch(val)}
-                  dropdownRender={(menu) => (
-                    <>
-                      {menu}
-                      {channelSearch && !channelOptions.includes(channelSearch) && (
-                        <div
-                          style={{ padding: '8px 12px', cursor: 'pointer', color: 'var(--primary-color)', borderTop: '1px solid #f0f0f0' }}
-                          onMouseDown={(e) => e.preventDefault()}
-                          onClick={() => {
-                            setChannelOptions((prev) => [...prev, channelSearch]);
-                            form.setFieldValue('channel', channelSearch);
-                            setChannelSearch('');
-                          }}
-                        >
-                          + Create "{channelSearch}"
-                        </div>
-                      )}
-                    </>
-                  )}
-                  options={channelOptions.map((o) => ({ label: o, value: o }))}
-                />
+                  onChange={() => form.setFieldValue('subChannelId', undefined)}
+                >
+                  {mainChannels.map(mc => (
+                    <Select.Option key={mc.id} value={mc.id}>{mc.name}</Select.Option>
+                  ))}
+                </Select>
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item
+                noStyle
+                shouldUpdate={(prev, curr) => prev.mainChannelId !== curr.mainChannelId}
+              >
+                {() => {
+                  const selectedMainId = form.getFieldValue('mainChannelId');
+                  const selectedMain = mainChannels.find(mc => mc.id === selectedMainId);
+                  const subChannels = selectedMain ? selectedMain.subChannels : [];
+                  return (
+                    <Form.Item name="subChannelId" label="Sub Channel">
+                      <Select
+                        allowClear
+                        placeholder="Select sub channel"
+                        style={{ borderRadius: '8px' }}
+                        disabled={!selectedMainId}
+                      >
+                        {subChannels.map((sc: any) => (
+                          <Select.Option key={sc.id} value={sc.id}>{sc.name}</Select.Option>
+                        ))}
+                      </Select>
+                    </Form.Item>
+                  );
+                }}
               </Form.Item>
             </Col>
             <Col span={8}>
@@ -739,9 +787,9 @@ export const Customers: React.FC = () => {
               <Descriptions.Item label="Code">
                 <Text code strong>{detailCustomer.code}</Text>
               </Descriptions.Item>
-              <Descriptions.Item label="Channel">
-                {detailCustomer.channel
-                  ? <Tag color="geekblue" style={{ borderRadius: '8px', border: 'none' }}>{detailCustomer.channel}</Tag>
+              <Descriptions.Item label="Main Channel">
+                {detailCustomer.mainChannel
+                  ? <Tag color="geekblue" style={{ borderRadius: '8px', border: 'none' }}>{detailCustomer.mainChannel.name}</Tag>
                   : '—'}
               </Descriptions.Item>
               <Descriptions.Item label="Name">{detailCustomer.name}</Descriptions.Item>
@@ -750,9 +798,10 @@ export const Customers: React.FC = () => {
               <Descriptions.Item label="Email">{detailCustomer.email || '—'}</Descriptions.Item>
               <Descriptions.Item label="City">{detailCustomer.city || '—'}</Descriptions.Item>
               <Descriptions.Item label="Township">{detailCustomer.township || '—'}</Descriptions.Item>
-              <Descriptions.Item label="Payment Terms">{detailCustomer.paymentTermDays} days</Descriptions.Item>
+              <Descriptions.Item label="Region">{detailCustomer.region || '—'}</Descriptions.Item>
+              <Descriptions.Item label="District">{detailCustomer.district || '—'}</Descriptions.Item>
               <Descriptions.Item label="Address" span={2}>{detailCustomer.address || '—'}</Descriptions.Item>
-              <Descriptions.Item label="Status">
+              <Descriptions.Item label="Status" span={2}>
                 <Badge status={detailCustomer.isActive ? 'success' : 'warning'} text={detailCustomer.isActive ? 'Active' : 'Pending Activation'} />
               </Descriptions.Item>
               <Descriptions.Item label="Submitted By / SR">

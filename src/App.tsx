@@ -31,6 +31,7 @@ import { Suppliers } from './pages/suppliers/Suppliers';
 import { BusinessUnits } from './pages/business-units/BusinessUnits';
 import { Categories } from './pages/categories/Categories';
 import { Dealers } from './pages/dealers/Dealers';
+import { Channels } from './pages/channels/Channels';
 import { PurchaseOrders } from './pages/purchase-orders/PurchaseOrders';
 import { SalesTeams } from './pages/sales-teams/SalesTeams';
 import { Promotions } from './pages/promotions/Promotions';
@@ -88,7 +89,7 @@ export const App: React.FC = () => {
           <Routes>
             <Route path="/login" element={<Login />} />
             
-            <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'HQ_MANAGER', 'BRANCH_MANAGER', 'INVENTORY_OFFICER', 'FINANCE_OFFICER', 'VIEWER_AUDITOR']} />}>
+            <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'HQ_MANAGER', 'BRANCH_MANAGER', 'INVENTORY_OFFICER', 'FINANCE_OFFICER', 'VIEWER_AUDITOR', 'PURCHASE_ORDER']} />}>
               <Route element={<AdminLayout />}>
                 <Route path="/" element={<Navigate to="/dashboard" replace />} />
                 <Route path="/dashboard" element={<Dashboard />} />
@@ -115,6 +116,7 @@ export const App: React.FC = () => {
                 <Route path="/business-units" element={<BusinessUnits />} />
                 <Route path="/categories" element={<Categories />} />
                 <Route path="/dealers" element={<Dealers />} />
+                <Route path="/channels" element={<Channels />} />
                 <Route path="/purchase-orders" element={<PurchaseOrders />} />
                 <Route path="/administration" element={<Administration />} />
                 <Route path="/audit-logs" element={<AuditLogs />} />

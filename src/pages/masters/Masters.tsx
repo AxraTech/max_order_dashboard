@@ -10,12 +10,13 @@ const items = [
   { title: 'Products', path: '/products', icon: <ShopOutlined /> },
   { title: 'Branches', path: '/branches', icon: <EnvironmentOutlined /> },
   { title: 'Sales Representatives', path: '/sales-reps', icon: <IdcardOutlined /> },
-  { title: 'Sales Teams', path: '/sales-teams', icon: <TeamOutlined /> },
+  { title: 'Sale And Marketing Team', path: '/sales-teams', icon: <TeamOutlined /> },
   { title: 'Inventory', path: '/inventory', icon: <DatabaseOutlined /> },
   { title: 'Suppliers', path: '/suppliers', icon: <ContactsOutlined /> },
   { title: 'Business Units', path: '/business-units', icon: <DatabaseOutlined /> },
   { title: 'Product Categories', path: '/categories', icon: <ShopOutlined /> },
   { title: 'Dealers', path: '/dealers', icon: <AuditOutlined /> },
+  { title: 'Channels', path: '/channels', icon: <ShopOutlined /> },
 ];
 
 export const Masters: React.FC = () => {

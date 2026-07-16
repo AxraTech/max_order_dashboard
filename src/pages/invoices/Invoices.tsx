@@ -42,6 +42,7 @@ interface InvoiceRecord {
   invoiceDate: string; dueDate: string; createdAt?: string; updatedAt?: string;
   subtotal: number; tax: number; discount: number; totalAmount: number;
   manualDiscount?: number | null;
+  cashDownDiscount?: number | null;
   cashback?: number | null;
   paidAmount: number; balanceDue: number;
   notes?: string | null;
@@ -112,7 +113,7 @@ export const Invoices: React.FC = () => {
   const [products, setProducts] = useState<any[]>([]);
   const [productOptions, setProductOptions] = useState<any[]>([]);
 
-  const [editTotals, setEditTotals] = useState({ subtotal: 0, tax: 0, discount: 0, manualDiscount: 0, cashback: 0, totalAmount: 0, balanceDue: 0 });
+  const [editTotals, setEditTotals] = useState({ subtotal: 0, tax: 0, discount: 0, manualDiscount: 0, cashback: 0, partnerCommission: 0, totalAmount: 0, balanceDue: 0 });
   const canEditInvoice = user?.role?.name === 'SUPER_ADMIN' || user?.role?.name === 'ACCOUNTANT';
 
   const handleDownloadPDF = () => {
@@ -198,6 +199,7 @@ export const Invoices: React.FC = () => {
       discount: initialPromoDiscount,
       manualDiscount: Number(detail.manualDiscount || 0),
       cashback: Number(detail.cashback || 0),
+      partnerCommission: Number(detail.partnerCommission || 0),
       items: formItems,
     });
 
@@ -222,6 +224,7 @@ export const Invoices: React.FC = () => {
       discount: initialPromoDiscount,
       manualDiscount: Number(detail.manualDiscount || 0),
       cashback: Number(detail.cashback || 0),
+      partnerCommission: Number(detail.partnerCommission || 0),
       totalAmount: Number(detail.totalAmount),
       balanceDue: Number(detail.balanceDue),
     });
@@ -243,9 +246,10 @@ export const Invoices: React.FC = () => {
     const promoDiscount = Number(allValues.discount) || 0;
     const manualDiscount = Number(allValues.manualDiscount) || 0;
     const cashback = Number(allValues.cashback) || 0;
+    const partnerCommission = Number(allValues.partnerCommission) || 0;
     const paidAmount = detail ? Number(detail.paidAmount) : 0;
 
-    const totalAmount = subtotal + tax - promoDiscount - manualDiscount - cashback;
+    const totalAmount = subtotal + tax - promoDiscount - manualDiscount - cashback - partnerCommission;
     const balanceDue = Math.max(0, totalAmount - paidAmount);
 
     setEditTotals({
@@ -254,6 +258,7 @@ export const Invoices: React.FC = () => {
       discount: promoDiscount,
       manualDiscount,
       cashback,
+      partnerCommission,
       totalAmount,
       balanceDue
     });
@@ -272,7 +277,7 @@ export const Invoices: React.FC = () => {
       }));
 
       const finalSubtotal = finalItems.reduce((acc: number, cur: any) => acc + cur.totalPrice, 0);
-      const finalTotal = finalSubtotal + Number(values.tax || 0) - Number(values.discount || 0) - Number(values.manualDiscount || 0) - Number(values.cashback || 0);
+      const finalTotal = finalSubtotal + Number(values.tax || 0) - Number(values.discount || 0) - Number(values.manualDiscount || 0) - Number(values.cashback || 0) - Number(values.partnerCommission || 0);
       const finalBalance = Math.max(0, finalTotal - Number(detail.paidAmount));
 
       setActionLoading(true);
@@ -282,6 +287,7 @@ export const Invoices: React.FC = () => {
         discount: Number(values.discount || 0) + Number(values.manualDiscount || 0),
         manualDiscount: Number(values.manualDiscount || 0),
         cashback: Number(values.cashback || 0),
+        partnerCommission: Number(values.partnerCommission || 0),
         subtotal: finalSubtotal,
         totalAmount: finalTotal,
         balanceDue: finalBalance,
@@ -535,22 +541,29 @@ export const Invoices: React.FC = () => {
           <div style={{ padding: '8px 0' }}>
             {/* Invoice Body */}
             <div id={`invoice-print-${detail.id}`} style={{ position: 'relative', overflow: 'hidden', padding: '36px', background: '#ffffff', borderRadius: '12px', border: '1px solid #e8e8e8', fontFamily: 'Inter, system-ui, sans-serif' }}>
-              {/* Diagonal Logo Watermark */}
+              {/* Diagonal Text Watermark */}
               <div style={{
                 position: 'absolute',
-                top: '50%',
-                left: '50%',
-                transform: 'translate(-50%, -50%) rotate(-30deg)',
-                width: '75%',
-                opacity: 0.1,
+                top: 0, left: 0, right: 0, bottom: 0,
                 pointerEvents: 'none',
                 zIndex: 0,
                 userSelect: 'none',
                 display: 'flex',
                 justifyContent: 'center',
-                alignItems: 'center'
+                alignItems: 'center',
+                overflow: 'hidden'
               }}>
-                <img src="/MENLogoText.png" style={{ width: '100%', height: 'auto' }} alt="watermark" />
+                <div style={{
+                  transform: 'rotate(-45deg)',
+                  whiteSpace: 'nowrap',
+                  fontSize: '60px',
+                  fontWeight: 900,
+                  color: '#1d4ed8',
+                  opacity: 0.08,
+                  letterSpacing: '1px'
+                }}>
+                  Myanma Executive Network Co.,Ltd.
+                </div>
               </div>
 
 
@@ -786,10 +799,22 @@ export const Invoices: React.FC = () => {
                           <td style={{ padding: '6px 0', textAlign: 'right', fontWeight: 700, color: '#DC2626' }}>-{Math.round(Number(detail.manualDiscount)).toLocaleString()} {CURRENCY.symbol}</td>
                         </tr>
                       )}
+                      {Number(detail.cashDownDiscount || 0) > 0 && (
+                        <tr>
+                          <td style={{ padding: '6px 0', color: '#555', fontWeight: 500 }}>COD Discount</td>
+                          <td style={{ padding: '6px 0', textAlign: 'right', fontWeight: 700, color: '#DC2626' }}>-{Math.round(Number(detail.cashDownDiscount)).toLocaleString()} {CURRENCY.symbol}</td>
+                        </tr>
+                      )}
                       {Number(detail.cashback || 0) > 0 && (
                         <tr>
                           <td style={{ padding: '6px 0', color: '#555', fontWeight: 500 }}>Cashback</td>
                           <td style={{ padding: '6px 0', textAlign: 'right', fontWeight: 700, color: '#DC2626' }}>-{Math.round(Number(detail.cashback)).toLocaleString()} {CURRENCY.symbol}</td>
+                        </tr>
+                      )}
+                      {Number(detail.partnerCommission || 0) > 0 && (
+                        <tr>
+                          <td style={{ padding: '6px 0', color: '#555', fontWeight: 500 }}>Partner Coms</td>
+                          <td style={{ padding: '6px 0', textAlign: 'right', fontWeight: 700, color: '#DC2626' }}>-{Math.round(Number(detail.partnerCommission)).toLocaleString()} {CURRENCY.symbol}</td>
                         </tr>
                       )}
                       {Number(detail.tax || 0) > 0 && (
@@ -944,18 +969,23 @@ export const Invoices: React.FC = () => {
           </Row>
 
           <Row gutter={16}>
-            <Col span={8}>
+            <Col span={6}>
               <Form.Item name="discount" label="Promo Discount">
                 <InputNumber min={0} addonAfter="K" style={{ width: '100%', borderRadius: '10px' }} />
               </Form.Item>
             </Col>
-            <Col span={8}>
+            <Col span={6}>
               <Form.Item name="manualDiscount" label="Manual Discount">
                 <InputNumber min={0} addonAfter="K" style={{ width: '100%', borderRadius: '10px' }} />
               </Form.Item>
             </Col>
-            <Col span={8}>
+            <Col span={6}>
               <Form.Item name="cashback" label="Cashback">
+                <InputNumber min={0} addonAfter="K" style={{ width: '100%', borderRadius: '10px' }} />
+              </Form.Item>
+            </Col>
+            <Col span={6}>
+              <Form.Item name="partnerCommission" label="Partner Coms">
                 <InputNumber min={0} addonAfter="K" style={{ width: '100%', borderRadius: '10px' }} />
               </Form.Item>
             </Col>
@@ -1055,9 +1085,9 @@ export const Invoices: React.FC = () => {
                 <span style={{ fontWeight: 700 }}>{Math.round(editTotals.subtotal).toLocaleString()} {CURRENCY.symbol}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
-                <span style={{ color: '#666' }}>Discounts &amp; Cashback:</span>
+                <span style={{ color: '#666' }}>Discounts, Cashback &amp; Coms:</span>
                 <span style={{ fontWeight: 700, color: '#DC2626' }}>
-                  -{Math.round(editTotals.discount + editTotals.manualDiscount + editTotals.cashback).toLocaleString()} {CURRENCY.symbol}
+                  -{Math.round(editTotals.discount + editTotals.manualDiscount + editTotals.cashback + editTotals.partnerCommission).toLocaleString()} {CURRENCY.symbol}
                 </span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>

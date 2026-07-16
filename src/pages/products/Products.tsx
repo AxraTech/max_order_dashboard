@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Card, Typography, Table, Tag, Input, Select, Space, Row, Col, Tooltip, Button, Modal, Form, InputNumber, Switch, message, Popconfirm } from 'antd';
-import { SearchOutlined, SafetyCertificateOutlined, ExperimentOutlined, PlusOutlined, EditOutlined, DeleteOutlined, DownloadOutlined } from '@ant-design/icons';
+import { Card, Typography, Table, Tag, Input, Select, Space, Row, Col, Tooltip, Button, Modal, Form, InputNumber, Switch, message, Popconfirm, Upload } from 'antd';
+import { SearchOutlined, SafetyCertificateOutlined, ExperimentOutlined, PlusOutlined, EditOutlined, DeleteOutlined, DownloadOutlined, UploadOutlined, FileExcelOutlined } from '@ant-design/icons';
 import * as XLSX from 'xlsx-js-style';
 import { api } from '../../services/api';
 import { CURRENCY } from '../../types/index';
@@ -27,10 +27,13 @@ interface ProductItem {
   dosageForm: string | null;
   isScheduled: boolean;
   isControlled: boolean;
+  mustSale: boolean;
   storageConditions: string | null;
   category: CategoryInfo;
   businessUnitId?: string | null;
   businessUnit?: { id: string; name: string } | null;
+  supplierId?: string | null;
+  supplier?: { id: string; name: string } | null;
   expiryAlertThreshold: number;
 }
 
@@ -102,6 +105,8 @@ export const Products: React.FC = () => {
   const [creatingBU, setCreatingBU] = useState(false);
   const [editingBUId, setEditingBUId] = useState<string | null>(null);
   
+  const [suppliers, setSuppliers] = useState<any[]>([]);
+  
   const [newCategoryName, setNewCategoryName] = useState('');
   const [creatingCategory, setCreatingCategory] = useState(false);
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
@@ -114,6 +119,7 @@ export const Products: React.FC = () => {
   useEffect(() => {
     fetchCategories();
     fetchBusinessUnits();
+    fetchSuppliers();
   }, []);
 
   useEffect(() => {
@@ -139,6 +145,17 @@ export const Products: React.FC = () => {
       }
     } catch (error) {
       console.error('Failed to fetch business units:', error);
+    }
+  };
+
+  const fetchSuppliers = async () => {
+    try {
+      const res = await api.get('/suppliers');
+      if (res.data.success) {
+        setSuppliers(res.data.data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch suppliers:', error);
     }
   };
 
@@ -290,6 +307,7 @@ export const Products: React.FC = () => {
       genericName: record.genericName,
       categoryId: record.category.id,
       businessUnitId: record.businessUnitId || null,
+      supplierId: record.supplierId || null,
       dosageForm: record.dosageForm,
       basePrice: record.basePrice,
       sellingPrice: record.sellingPrice,
@@ -298,6 +316,7 @@ export const Products: React.FC = () => {
       storageConditions: record.storageConditions,
       isScheduled: record.isScheduled,
       isControlled: record.isControlled,
+      mustSale: record.mustSale || false,
       expiryAlertThreshold: record.expiryAlertThreshold,
     });
     setIsModalOpen(true);
@@ -331,6 +350,11 @@ export const Products: React.FC = () => {
         <div>
           <div style={{ fontWeight: 600, color: '#111827' }}>
             {record.name}
+            {record.mustSale && (
+              <Tag color="orange" style={{ border: 'none', borderRadius: '8px', marginLeft: '6px', fontWeight: 600 }}>
+                🔥 Must Sale
+              </Tag>
+            )}
             {record.brandName && <span style={{ fontWeight: 400, color: '#6b7280', marginLeft: '6px' }}>({record.brandName})</span>}
           </div>
           {record.genericName && (
@@ -455,11 +479,80 @@ export const Products: React.FC = () => {
     },
   ];
 
+  const handleImportProducts = (file: any) => {
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try {
+        message.loading({ content: 'Importing products...', key: 'importProducts' });
+        const data = new Uint8Array(e.target?.result as ArrayBuffer);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const firstSheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[firstSheetName];
+        
+        const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[];
+        
+        if (rows.length <= 1) {
+          message.error({ content: 'No data found in the Excel file', key: 'importProducts' });
+          return;
+        }
+
+        const products = [];
+        for (let i = 1; i < rows.length; i++) {
+          const r = rows[i];
+          if (!r || !r.length || !r[1] || !r[2]) continue; 
+          
+          products.push({
+            code: r[0],
+            sku: String(r[1]),
+            name: r[2],
+            category: r[3],
+            uom: r[4],
+            basePrice: r[5],
+            sellingPrice: r[6],
+            dealerPrice: r[7],
+            supplier: r[8],
+            businessUnit: r[9],
+            description: r[10],
+            genericName: r[11],
+            brandName: r[12],
+            dosageForm: r[13]
+          });
+        }
+
+        const res = await api.post('/products/import', { products });
+        message.success({ content: res.data.message || 'Import successful', key: 'importProducts' });
+        fetchProducts();
+      } catch (err: any) {
+        console.error('Import failed:', err);
+        message.error({ content: err.response?.data?.message || 'Failed to import products', key: 'importProducts' });
+      }
+    };
+    reader.readAsArrayBuffer(file);
+    return false; 
+  };
+
   return (
     <div className="animate-fade-in" style={{ paddingBottom: '24px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
         <Title level={2} style={{ margin: 0, fontWeight: 700 }}>Product Catalog</Title>
         <Space>
+          <Button 
+            href="/templates/Product_Import_Template.xlsx" 
+            target="_blank" 
+            icon={<FileExcelOutlined />} 
+            style={{ borderRadius: '12px' }}
+          >
+            Template
+          </Button>
+          <Upload 
+            beforeUpload={handleImportProducts}
+            showUploadList={false}
+            accept=".xlsx, .xls"
+          >
+            <Button icon={<UploadOutlined />} style={{ borderRadius: '12px' }}>
+              Import Excel
+            </Button>
+          </Upload>
           <Button
             icon={<DownloadOutlined />}
             onClick={handleExportProducts}
@@ -591,6 +684,14 @@ export const Products: React.FC = () => {
               </Form.Item>
             </Col>
             <Col span={12}>
+              <Form.Item name="code" label="Product Code (Optional)">
+                <Input placeholder="Auto-generated if left blank" style={{ borderRadius: '8px' }} />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Row gutter={16}>
+            <Col span={12}>
               <Form.Item
                 name="sku"
                 label="SKU Code"
@@ -599,14 +700,14 @@ export const Products: React.FC = () => {
                 <Input placeholder="e.g. PARA-500" style={{ borderRadius: '8px' }} />
               </Form.Item>
             </Col>
-          </Row>
-
-          <Row gutter={16}>
             <Col span={12}>
               <Form.Item name="brandName" label="Brand Name">
                 <Input placeholder="e.g. Biogesic" style={{ borderRadius: '8px' }} />
               </Form.Item>
             </Col>
+          </Row>
+
+          <Row gutter={16}>
             <Col span={12}>
               <Form.Item name="genericName" label="Generic Name (Active Ingredient)">
                 <Input placeholder="e.g. Paracetamol" style={{ borderRadius: '8px' }} />
@@ -774,6 +875,26 @@ export const Products: React.FC = () => {
                 <Input placeholder="e.g. Tablet, Capsule, Gel" style={{ borderRadius: '8px' }} />
               </Form.Item>
             </Col>
+            <Col span={12}>
+              <Form.Item
+                name="supplierId"
+                label="Supplier (Optional)"
+              >
+                <Select
+                  placeholder="Select Supplier"
+                  style={{ borderRadius: '8px' }}
+                  allowClear
+                  showSearch
+                  optionFilterProp="children"
+                >
+                  {suppliers.map(sup => (
+                    <Select.Option key={sup.id} value={sup.id}>
+                      {sup.name}
+                    </Select.Option>
+                  ))}
+                </Select>
+              </Form.Item>
+            </Col>
           </Row>
 
           <Row gutter={16}>
@@ -826,13 +947,18 @@ export const Products: React.FC = () => {
                 <Input placeholder="e.g. Cold Chain (2°C - 8°C)" style={{ borderRadius: '8px' }} />
               </Form.Item>
             </Col>
-            <Col span={6}>
+            <Col span={8}>
               <Form.Item name="isScheduled" label="Scheduled Drug" valuePropName="checked">
                 <Switch />
               </Form.Item>
             </Col>
-            <Col span={6}>
+            <Col span={8}>
               <Form.Item name="isControlled" label="Controlled Drug" valuePropName="checked">
+                <Switch />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item name="mustSale" label="Must Sale Feature" valuePropName="checked">
                 <Switch />
               </Form.Item>
             </Col>
