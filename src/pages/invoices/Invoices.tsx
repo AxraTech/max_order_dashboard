@@ -570,7 +570,7 @@ export const Invoices: React.FC = () => {
               {/* Header: Company Info | Invoice Title & Status */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
                 <div>
-                  <h1 style={{ margin: 0, fontSize: '28px', color: '#3f51b5', fontWeight: 800 }}>MaxOrder</h1>
+                  <img src="/men-logo-only.png" style={{ height: '45px', width: 'auto', display: 'block', marginBottom: '8px' }} alt="MEN Logo" />
                   <p style={{ margin: '2px 0 6px 0', fontSize: '14px', color: '#666', fontWeight: 500 }}>Pharmaceutical Distribution</p>
                   <p style={{ margin: '2px 0', fontSize: '12px', color: '#444' }}>{detail.order?.branch?.address || 'No. 42, Pyay Road, Yangon, Myanmar'}</p>
                   <p style={{ margin: '2px 0', fontSize: '12px', color: '#444' }}>Phone: {detail.order?.branch?.phone || '01-2345678'} | Email: {detail.order?.branch?.email || 'billing@maxorder.com'}</p>
