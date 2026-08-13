@@ -515,11 +515,11 @@ export const Products: React.FC = () => {
             const sku = getVal(['sku', 'product code', 'item sku', 'code']);
             const name = getVal(['name', 'product name', 'item name']);
 
-            if (!sku || !name) continue;
+            if (!name) continue;
 
             products.push({
               code: getVal(['code', 'product code']),
-              sku: String(sku),
+              sku: sku ? String(sku) : '',
               name: String(name),
               category: getVal(['category', 'category name']),
               uom: getVal(['uom', 'unit']),
@@ -540,12 +540,12 @@ export const Products: React.FC = () => {
         if (products.length === 0 && arrayRows.length > 1) {
           for (let i = 1; i < arrayRows.length; i++) {
             const r = arrayRows[i];
-            if (!r || !r.length || (!r[1] && !r[2])) continue;
+            if (!r || !r.length || (!r[1] && !r[2] && !r[0])) continue;
             
             products.push({
               code: r[0],
-              sku: String(r[1] || r[0] || ''),
-              name: r[2] || r[1] || '',
+              sku: String(r[1] || ''),
+              name: r[2] || r[1] || r[0] || '',
               category: r[3],
               uom: r[4],
               basePrice: r[5],
@@ -562,7 +562,7 @@ export const Products: React.FC = () => {
         }
 
         if (products.length === 0) {
-          message.error({ content: 'No valid products with SKU and Name found in file', key: 'importProducts' });
+          message.error({ content: 'No valid products with Name found in file', key: 'importProducts' });
           return;
         }
 
@@ -741,10 +741,9 @@ export const Products: React.FC = () => {
             <Col span={12}>
               <Form.Item
                 name="sku"
-                label="SKU Code"
-                rules={[{ required: true, message: 'Please input SKU code!' }]}
+                label="SKU Code (Optional)"
               >
-                <Input placeholder="e.g. PARA-500" style={{ borderRadius: '8px' }} />
+                <Input placeholder="Auto-generated if left blank" style={{ borderRadius: '8px' }} />
               </Form.Item>
             </Col>
             <Col span={12}>

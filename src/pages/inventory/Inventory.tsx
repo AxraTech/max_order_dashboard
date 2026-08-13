@@ -81,6 +81,7 @@ export const Inventory: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [productsList, setProductsList] = useState<any[]>([]);
+  const [productSearchText, setProductSearchText] = useState('');
   const [branchesList, setBranchesList] = useState<any[]>([]);
   const [form] = Form.useForm();
 
@@ -376,7 +377,7 @@ export const Inventory: React.FC = () => {
 
   const fetchProductsList = async () => {
     try {
-      const res = await api.get('/products', { params: { limit: 100 } });
+      const res = await api.get('/products', { params: { limit: 1000 } });
       if (res.data.success) {
         setProductsList(res.data.data);
       }
@@ -875,7 +876,7 @@ export const Inventory: React.FC = () => {
         <Row gutter={[16, 16]} align="middle">
           <Col xs={24} sm={12} md={8}>
             <Input
-              placeholder="Search products by SKU, Name, Generic..."
+              placeholder="Search strictly by product (Name, SKU, Code, Generic...)"
               prefix={<SearchOutlined style={{ color: 'var(--text-secondary)' }} />}
               value={search}
               onChange={(e) => {
@@ -959,18 +960,65 @@ export const Inventory: React.FC = () => {
           <Form.Item
             name="productId"
             label="Product Selection"
-            rules={[{ required: true, message: 'Please select a product!' }]}
+            rules={[{ required: true, message: 'Please select or enter a product!' }]}
           >
             <Select
               showSearch
-              placeholder="Select medicine product to add stock"
-              optionFilterProp="children"
-              filterOption={(input, option) =>
-                (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
-              }
-              options={productsList.map(p => ({
+              placeholder="Type product name, SKU, or enter custom product (e.g. BB)..."
+              searchValue={productSearchText}
+              onSearch={(val) => setProductSearchText(val)}
+              onChange={(val) => {
+                form.setFieldValue('productId', val);
+                setProductSearchText('');
+              }}
+              filterOption={(input, option) => {
+                const label = String(option?.label ?? '').toLowerCase();
+                const query = input.toLowerCase().trim();
+                return label.includes(query);
+              }}
+              dropdownRender={(menu) => {
+                const query = productSearchText.trim();
+                const hasMatch = productsList.some(
+                  (p) =>
+                    p.id === query ||
+                    p.name?.toLowerCase() === query.toLowerCase() ||
+                    p.sku?.toLowerCase() === query.toLowerCase() ||
+                    p.code?.toLowerCase() === query.toLowerCase()
+                );
+                return (
+                  <>
+                    {menu}
+                    {query && !hasMatch && (
+                      <div
+                        style={{
+                          padding: '10px 12px',
+                          cursor: 'pointer',
+                          color: '#0284c7',
+                          fontWeight: 600,
+                          borderTop: '1px solid #e0f2fe',
+                          background: '#f0f9ff',
+                        }}
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => {
+                          const customVal = query;
+                          if (!productsList.some((p) => p.id === customVal)) {
+                            setProductsList((prev) => [{ id: customVal, name: customVal, isCustom: true }, ...prev]);
+                          }
+                          form.setFieldValue('productId', customVal);
+                          setProductSearchText('');
+                        }}
+                      >
+                        + Use / Create custom product "{query}"
+                      </div>
+                    )}
+                  </>
+                );
+              }}
+              options={productsList.map((p) => ({
                 value: p.id,
-                label: `${p.name} (${p.sku})`
+                label: p.isCustom
+                  ? `+ Custom Product: "${p.name}"`
+                  : `${p.name} ${p.sku ? `(${p.sku})` : p.code ? `(${p.code})` : ''} ${p.genericName ? `[${p.genericName}]` : ''}`.trim(),
               }))}
               style={{ borderRadius: '8px' }}
             />
