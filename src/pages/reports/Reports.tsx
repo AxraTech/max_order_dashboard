@@ -53,7 +53,7 @@ export const Reports: React.FC = () => {
 
   // Filters State
   const [dateRange, setDateRange] = useState<[dayjs.Dayjs, dayjs.Dayjs]>([
-    dayjs().subtract(29, 'days'),
+    dayjs().startOf('month'),
     dayjs()
   ]);
   const [selectedBranch, setSelectedBranch] = useState<string>('all');
@@ -76,7 +76,7 @@ export const Reports: React.FC = () => {
   const [dailySales, setDailySales] = useState<any[]>([]);
   const [systemSales, setSystemSales] = useState<any[]>([]);
   const [itemSales, setItemSales] = useState<any[]>([]);
-  const [saleDetail, setSaleDetail] = useState<any[]>([]);
+  const [_saleDetail, setSaleDetail] = useState<any[]>([]);
   const [kpiData, setKpiData] = useState<any[]>([]);
   // const [marketingData, setMarketingData] = useState<any>(null);
 
@@ -160,7 +160,7 @@ export const Reports: React.FC = () => {
 
   // Reset Filters
   const handleResetFilters = () => {
-    setDateRange([dayjs().subtract(29, 'days'), dayjs()]);
+    setDateRange([dayjs().startOf('month'), dayjs()]);
     setSelectedBranch(isBranchManager && user?.branch?.id ? user.branch.id : 'all');
     setSelectedRep('all');
     setSelectedCustomer('all');
@@ -512,7 +512,7 @@ export const Reports: React.FC = () => {
     const period = `From ${fromDate} To ${toDate}`;
 
     const COLS = [
-      'Order No.', 'Order Date', 'Customer Code', 'Customer Name',
+      'Order No.', 'Invoice No.', 'Order Date', 'Customer Code', 'Customer Name',
       'Sales Rep Name', 'Sales Team', 'Status', 'Gross Sales (MMK)',
       'Tax (MMK)', 'Sales Discount (MMK)', 'Manual Discount (MMK)', 'COD Discount (MMK)', 'Partner Commission (MMK)', 'Cashback (MMK)', 'Total Discount (MMK)',
       'FOC Qty', 'Sample Qty', 'Net Sales (MMK)'
@@ -528,6 +528,7 @@ export const Reports: React.FC = () => {
     systemSales.forEach((r: any) => {
       wsRows.push([
         r.orderNumber,
+        r.invoiceNumber || '—',
         dayjs(r.orderDate).format('YYYY-MM-DD HH:mm'),
         r.customerCode,
         r.customerName,
@@ -560,12 +561,12 @@ export const Reports: React.FC = () => {
     const gSample = systemSales.reduce((s, r) => s + Number(r.sampleQty), 0);
     const gNet = systemSales.reduce((s, r) => s + Number(r.netSales), 0);
     wsRows.push([
-      'Grand Total', null, null, null, null, null, null,
+      'Grand Total', null, null, null, null, null, null, null,
       gGross, gTax, gPromo, gManual, gCod, gPartner, gCash, gTotalDisc, gFoc, gSample, gNet
     ]);
 
     const ws = XLSX.utils.aoa_to_sheet(wsRows);
-    ws['!cols'] = [14, 18, 14, 25, 20, 16, 14, 18, 16, 18, 18, 18, 18, 16, 18, 12, 12, 18].map(w => ({ wch: w }));
+    ws['!cols'] = [14, 16, 18, 14, 25, 20, 16, 14, 18, 16, 18, 18, 18, 18, 16, 18, 12, 12, 18].map(w => ({ wch: w }));
 
     ws['!merges'] = [
       { s: { r: 0, c: 0 }, e: { r: 0, c: COLS.length - 1 } },
@@ -1115,6 +1116,7 @@ export const Reports: React.FC = () => {
                     scroll={{ x: 1500 }}
                     columns={[
                       { title: 'Order No.', dataIndex: 'orderNumber', key: 'orderNumber', sorter: (a, b) => a.orderNumber.localeCompare(b.orderNumber), render: (v) => <Text code strong>{v}</Text> },
+                      { title: 'Invoice No.', dataIndex: 'invoiceNumber', key: 'invoiceNumber', render: (v) => v ? <Text code style={{ color: '#10B981' }}>{v}</Text> : <Text type="secondary">—</Text> },
                       { title: 'Order Date', dataIndex: 'orderDate', key: 'orderDate', sorter: (a, b) => a.orderDate.localeCompare(b.orderDate), render: (v) => dayjs(v).format('YYYY-MM-DD HH:mm') },
                       { title: 'Customer', key: 'customer', render: (_, r) => <div><Text strong>{r.customerName}</Text><br /><Text type="secondary" style={{ fontSize: 11 }}>{r.customerCode}</Text></div> },
                       { title: 'Sales Rep Name', dataIndex: 'salesRepName', key: 'salesRepName' },

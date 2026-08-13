@@ -64,6 +64,7 @@ export const Branches: React.FC = () => {
   const handleOpenEditModal = (record: BranchItem) => {
     setEditingBranch(record);
     form.setFieldsValue({
+      code: record.code,
       name: record.name,
       address: record.address,
       phone: record.phone,
@@ -283,6 +284,14 @@ export const Branches: React.FC = () => {
           onFinish={handleSubmit}
           style={{ marginTop: '20px' }}
         >
+          <Form.Item
+            name="code"
+            label="Branch Code (Optional)"
+            tooltip="Leave empty to auto-generate (e.g. BR0001)"
+          >
+            <Input placeholder="e.g. YGN, MDY, BGO (Optional - auto-generated if blank)" style={{ borderRadius: '8px' }} />
+          </Form.Item>
+
           <Form.Item
             name="name"
             label="Branch Name"

@@ -79,6 +79,7 @@ export type OrderStatus =
   | 'DRAFT'
   | 'SUBMITTED'
   | 'BRANCH_REVIEW'
+  | 'FINANCE_REVIEW'
   | 'PENDING'
   | 'APPROVED'
   | 'READY_FOR_DELIVERY'

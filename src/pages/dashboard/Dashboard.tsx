@@ -11,7 +11,8 @@ import {
   SafetyCertificateOutlined,
   TeamOutlined,
   BarChartOutlined,
-  BankOutlined
+  BankOutlined,
+  FireOutlined
 } from '@ant-design/icons';
 import { 
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
@@ -41,7 +42,7 @@ export const Dashboard: React.FC = () => {
   const [mustSaleProducts, setMustSaleProducts] = useState<any[]>([]);
   const [branches, setBranches] = useState<any[]>([]);
   const [selectedBranchId, setSelectedBranchId] = useState<string>('all');
-  const [dateRange, setDateRange] = useState<[dayjs.Dayjs, dayjs.Dayjs]>([dayjs().subtract(7, 'day'), dayjs()]);
+  const [dateRange, setDateRange] = useState<[dayjs.Dayjs, dayjs.Dayjs]>([dayjs().startOf('month'), dayjs()]);
 
   useEffect(() => {
     const fetchBranches = async () => {
@@ -396,7 +397,7 @@ export const Dashboard: React.FC = () => {
       {mustSaleProducts.length > 0 && (
         <Card className="glass-card" variant="borderless" style={{ marginBottom: '24px' }} title={
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ fontSize: '18px', color: '#f59e0b' }}>🔥</span>
+            <FireOutlined style={{ fontSize: '18px', color: '#f59e0b' }} />
             <span style={{ fontWeight: 700 }}>Must Sale Products Priority List</span>
           </div>
         }>

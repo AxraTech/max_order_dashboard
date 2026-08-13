@@ -489,34 +489,81 @@ export const Products: React.FC = () => {
         const firstSheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[firstSheetName];
         
-        const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[];
+        const jsonRows = XLSX.utils.sheet_to_json(worksheet) as any[];
+        const arrayRows = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[];
         
-        if (rows.length <= 1) {
+        if (jsonRows.length === 0 && arrayRows.length <= 1) {
           message.error({ content: 'No data found in the Excel file', key: 'importProducts' });
           return;
         }
 
         const products = [];
-        for (let i = 1; i < rows.length; i++) {
-          const r = rows[i];
-          if (!r || !r.length || !r[1] || !r[2]) continue; 
-          
-          products.push({
-            code: r[0],
-            sku: String(r[1]),
-            name: r[2],
-            category: r[3],
-            uom: r[4],
-            basePrice: r[5],
-            sellingPrice: r[6],
-            dealerPrice: r[7],
-            supplier: r[8],
-            businessUnit: r[9],
-            description: r[10],
-            genericName: r[11],
-            brandName: r[12],
-            dosageForm: r[13]
-          });
+
+        // 1. Try Object-based header matching first
+        if (jsonRows.length > 0 && typeof jsonRows[0] === 'object' && !Array.isArray(jsonRows[0])) {
+          for (const row of jsonRows) {
+            const getVal = (possibleKeys: string[]) => {
+              for (const key of Object.keys(row)) {
+                const cleanKey = key.toLowerCase().replace(/[^a-z0-9]/g, '');
+                if (possibleKeys.some(pk => pk.replace(/[^a-z0-9]/g, '') === cleanKey)) {
+                  return row[key];
+                }
+              }
+              return undefined;
+            };
+
+            const sku = getVal(['sku', 'product code', 'item sku', 'code']);
+            const name = getVal(['name', 'product name', 'item name']);
+
+            if (!sku || !name) continue;
+
+            products.push({
+              code: getVal(['code', 'product code']),
+              sku: String(sku),
+              name: String(name),
+              category: getVal(['category', 'category name']),
+              uom: getVal(['uom', 'unit']),
+              basePrice: getVal(['base price', 'baseprice', 'cost price', 'cost']),
+              sellingPrice: getVal(['selling price', 'sellingprice', 'price']),
+              dealerPrice: getVal(['dealer price', 'dealerprice']),
+              supplier: getVal(['supplier', 'supplier name']),
+              businessUnit: getVal(['business unit', 'businessunit', 'bu']),
+              description: getVal(['description', 'desc']),
+              genericName: getVal(['generic name', 'generic']),
+              brandName: getVal(['brand name', 'brand']),
+              dosageForm: getVal(['dosage form', 'dosage'])
+            });
+          }
+        }
+
+        // 2. Fallback to Positional Array matching if Object matching yielded 0 products
+        if (products.length === 0 && arrayRows.length > 1) {
+          for (let i = 1; i < arrayRows.length; i++) {
+            const r = arrayRows[i];
+            if (!r || !r.length || (!r[1] && !r[2])) continue;
+            
+            products.push({
+              code: r[0],
+              sku: String(r[1] || r[0] || ''),
+              name: r[2] || r[1] || '',
+              category: r[3],
+              uom: r[4],
+              basePrice: r[5],
+              sellingPrice: r[6],
+              dealerPrice: r[7],
+              supplier: r[8],
+              businessUnit: r[9],
+              description: r[10],
+              genericName: r[11],
+              brandName: r[12],
+              dosageForm: r[13]
+            });
+          }
+        }
+
+        if (products.length === 0) {
+          message.error({ content: 'No valid products with SKU and Name found in file', key: 'importProducts' });
+          return;
         }
 
         const res = await api.post('/products/import', { products });

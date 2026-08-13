@@ -634,7 +634,7 @@ export const Promotions: React.FC = () => {
                       style={{ width: '100%', borderRadius: '12px' }}
                       placeholder="e.g. 100,000"
                       formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-                      parser={value => value!.replace(/\$\s?|(,*)/g, '')}
+                      parser={value => (value ? (value.replace(/\$\s?|(,*)/g, '') as any) : '')}
                     />
                   </Form.Item>
                 </Col>
@@ -651,7 +651,7 @@ export const Promotions: React.FC = () => {
                         style={{ width: '100%', borderRadius: '12px' }}
                         placeholder="e.g. 10,000"
                         formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-                        parser={value => value!.replace(/\$\s?|(,*)/g, '')}
+                        parser={value => (value ? (value.replace(/\$\s?|(,*)/g, '') as any) : '')}
                       />
                     </Form.Item>
                   </Col>

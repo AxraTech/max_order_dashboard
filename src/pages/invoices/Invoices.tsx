@@ -44,6 +44,7 @@ interface InvoiceRecord {
   manualDiscount?: number | null;
   cashDownDiscount?: number | null;
   cashback?: number | null;
+  partnerCommission?: number | null;
   paidAmount: number; balanceDue: number;
   notes?: string | null;
   customer: { id: string; code: string; name: string; phone?: string; address?: string; township?: string; creditLimit?: any };
