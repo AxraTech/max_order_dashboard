@@ -154,6 +154,18 @@ body {
   height: 40px !important;
 }
 
+/* Scroll indicator animations */
+@keyframes scrollArrow {
+  0%   { opacity: 0.2; transform: translateX(-3px); }
+  50%  { opacity: 1;   transform: translateX(3px); }
+  100% { opacity: 0.2; transform: translateX(-3px); }
+}
+
+@keyframes scrollHintPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(99,102,241,0.0); opacity: 0.85; }
+  50%       { box-shadow: 0 0 0 5px rgba(99,102,241,0.12); opacity: 1; }
+}
+
 /* Remove scrollbars globally while keeping scroll functionality */
 ::-webkit-scrollbar {
   display: none !important;

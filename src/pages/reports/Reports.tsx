@@ -1,12 +1,14 @@
 import React, { useCallback, useEffect, useState, useMemo } from 'react';
 import {
   Row, Col, Card, Typography, Table, Tag, Select, DatePicker,
-  Button, Spin, Space, Tabs, Statistic, message
+  Button, Spin, Space, Tabs, Statistic, message, Input, Tooltip as AntTooltip
 } from 'antd';
 import {
   ReloadOutlined, CalendarOutlined, FileTextOutlined,
   BarChartOutlined, DollarOutlined, ShoppingCartOutlined,
-  StarOutlined, PercentageOutlined, DownloadOutlined, CheckCircleOutlined
+  StarOutlined, PercentageOutlined, DownloadOutlined, CheckCircleOutlined,
+  RiseOutlined, FallOutlined, DollarCircleOutlined, SearchOutlined,
+  FundProjectionScreenOutlined
 } from '@ant-design/icons';
 import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid,
@@ -78,6 +80,9 @@ export const Reports: React.FC = () => {
   const [itemSales, setItemSales] = useState<any[]>([]);
   const [_saleDetail, setSaleDetail] = useState<any[]>([]);
   const [kpiData, setKpiData] = useState<any[]>([]);
+  const [gpData, setGpData] = useState<any>(null);
+  const [gpSearch, setGpSearch] = useState('');
+  const [gpProfitabilityFilter, setGpProfitabilityFilter] = useState<string>('all');
   // const [marketingData, setMarketingData] = useState<any>(null);
 
   // Fetch dropdown data on mount
@@ -140,6 +145,9 @@ export const Reports: React.FC = () => {
       } else if (activeTab === 'kpi') {
         const res = await api.get('/reports/sales-rep-kpi', { params });
         if (res.data.success) setKpiData(res.data.data);
+      } else if (activeTab === 'gp') {
+        const res = await api.get('/reports/gross-profit', { params });
+        if (res.data.success) setGpData(res.data.data);
       }
       /*
       else if (activeTab === 'marketing') {
@@ -167,7 +175,55 @@ export const Reports: React.FC = () => {
     setSelectedCategory('all');
     setSelectedBusinessUnit('all');
     setSelectedStatus('all');
+    setGpSearch('');
+    setGpProfitabilityFilter('all');
   };
+
+  // Filtered products list for GP table
+  const filteredGpProducts = useMemo(() => {
+    if (!gpData?.products) return [];
+    let list = gpData.products;
+
+    if (gpSearch.trim()) {
+      const q = gpSearch.toLowerCase().trim();
+      list = list.filter((p: any) =>
+        p.productName.toLowerCase().includes(q) ||
+        p.productCode.toLowerCase().includes(q) ||
+        p.sku.toLowerCase().includes(q) ||
+        p.categoryName.toLowerCase().includes(q) ||
+        p.businessUnitName.toLowerCase().includes(q) ||
+        p.supplierName.toLowerCase().includes(q)
+      );
+    }
+
+    if (gpProfitabilityFilter === 'profitable') {
+      list = list.filter((p: any) => p.grossProfit > 0);
+    } else if (gpProfitabilityFilter === 'loss') {
+      list = list.filter((p: any) => p.grossProfit < 0);
+    } else if (gpProfitabilityFilter === 'high_margin') {
+      list = list.filter((p: any) => p.gpMargin >= 30);
+    } else if (gpProfitabilityFilter === 'low_margin') {
+      list = list.filter((p: any) => p.gpMargin >= 0 && p.gpMargin < 15);
+    }
+
+    return list;
+  }, [gpData?.products, gpSearch, gpProfitabilityFilter]);
+
+  // Margin Tier distribution for Pie Chart in GP tab
+  const gpMarginTierData = useMemo(() => {
+    if (!gpData?.products || gpData.products.length === 0) return [];
+    const highMargin = gpData.products.filter((p: any) => p.gpMargin >= 30).length;
+    const healthy = gpData.products.filter((p: any) => p.gpMargin >= 15 && p.gpMargin < 30).length;
+    const lowMargin = gpData.products.filter((p: any) => p.gpMargin >= 0 && p.gpMargin < 15).length;
+    const loss = gpData.products.filter((p: any) => p.grossProfit < 0).length;
+
+    return [
+      { name: 'High Margin (≥30%)', value: highMargin, color: '#10B981' },
+      { name: 'Healthy Margin (15-30%)', value: healthy, color: '#3B82F6' },
+      { name: 'Low Margin (0-15%)', value: lowMargin, color: '#F59E0B' },
+      { name: 'Loss Making (<0%)', value: loss, color: '#EF4444' },
+    ].filter(item => item.value > 0);
+  }, [gpData?.products]);
 
   // Format currency values for display/charts
   const formatValue = (val: number) => {
@@ -706,6 +762,128 @@ export const Reports: React.FC = () => {
     message.success('Item Sales Report exported successfully!');
   };
 
+  const handleExportGrossProfitReport = () => {
+    if (!gpData || gpData.products.length === 0) { message.warning('No data to export'); return; }
+
+    const branchName = selectedBranch === 'all'
+      ? 'All Branches'
+      : branches.find(b => b.id === selectedBranch)?.name || 'All Branches';
+
+    const companyName = `MEN Company (2026 - 2027) ( ${branchName} )`;
+    const reportTitle = 'Gross Profit (GP) & Margin Performance Report By Product';
+    const fromDate = dateRange?.[0]?.format('DD/MM/YYYY') ?? '';
+    const toDate = dateRange?.[1]?.format('DD/MM/YYYY') ?? '';
+    const period = `From ${fromDate} To ${toDate}`;
+
+    const COLS = [
+      'No.', 'Product Code', 'SKU', 'Product Name', 'Category', 'Business Unit', 'Supplier', 'UOM',
+      'Qty Sold', 'FOC / Free Qty', 'Inventory Consumption (Qty)', 'Avg Selling Price (MMK)', 'Avg COGS / Unit (MMK)',
+      'COGS Source', 'Gross Sales (MMK)', 'Sales Discounts (MMK)', 'Net Revenue (MMK)', 'Total COGS (MMK)', 'Gross Profit (MMK)', 'GP Margin (%)'
+    ];
+
+    type WsRow = (string | number | null)[];
+    const wsRows: WsRow[] = [];
+    wsRows.push([companyName, ...Array(COLS.length - 1).fill(null)]);
+    wsRows.push([reportTitle, ...Array(COLS.length - 1).fill(null)]);
+    wsRows.push([period, ...Array(COLS.length - 1).fill(null)]);
+    wsRows.push(COLS as WsRow);
+
+    gpData.products.forEach((p: any, idx: number) => {
+      const freeQty = p.focQuantity + p.sampleQuantity + (p.promoQuantity || 0);
+      wsRows.push([
+        idx + 1,
+        p.productCode,
+        p.sku,
+        p.productName,
+        p.categoryName,
+        p.businessUnitName,
+        p.supplierName,
+        p.uom,
+        p.salesQuantity,
+        freeQty,
+        p.inventoryConsumptionQty || p.totalQuantity,
+        p.avgSellingPrice,
+        p.avgUnitCost,
+        p.isCostEstimated ? 'Estimated (75% Base)' : 'Actual Batch / Weighted Avg',
+        p.grossSales,
+        p.discounts,
+        p.netRevenue,
+        p.totalCogs,
+        p.grossProfit,
+        `${p.gpMargin}%`
+      ]);
+    });
+
+    const sumQty = gpData.products.reduce((s: number, p: any) => s + p.salesQuantity, 0);
+    const sumFree = gpData.products.reduce((s: number, p: any) => s + (p.focQuantity + p.sampleQuantity + (p.promoQuantity || 0)), 0);
+    const sumConsumed = gpData.products.reduce((s: number, p: any) => s + (p.inventoryConsumptionQty || p.totalQuantity), 0);
+    const sumGross = gpData.products.reduce((s: number, p: any) => s + p.grossSales, 0);
+    const sumDisc = gpData.products.reduce((s: number, p: any) => s + p.discounts, 0);
+    const sumRev = gpData.products.reduce((s: number, p: any) => s + p.netRevenue, 0);
+    const sumCogs = gpData.products.reduce((s: number, p: any) => s + p.totalCogs, 0);
+    const sumGp = gpData.products.reduce((s: number, p: any) => s + p.grossProfit, 0);
+    const overallMargin = sumRev > 0 ? `${((sumGp / sumRev) * 100).toFixed(1)}%` : '0.0%';
+
+    wsRows.push([
+      'Grand Total', null, null, null, null, null, null, null,
+      sumQty, sumFree, sumConsumed, null, null, null,
+      sumGross, sumDisc, sumRev, sumCogs, sumGp, overallMargin
+    ]);
+
+    const ws = XLSX.utils.aoa_to_sheet(wsRows);
+    ws['!cols'] = [6, 14, 16, 28, 16, 16, 20, 8, 12, 12, 16, 18, 18, 22, 18, 16, 18, 18, 18, 14].map(w => ({ wch: w }));
+
+    ws['!merges'] = [
+      { s: { r: 0, c: 0 }, e: { r: 0, c: COLS.length - 1 } },
+      { s: { r: 1, c: 0 }, e: { r: 1, c: COLS.length - 1 } },
+      { s: { r: 2, c: 0 }, e: { r: 2, c: COLS.length - 1 } },
+    ];
+
+    const centerAlign = { horizontal: 'center', vertical: 'center' };
+
+    Object.keys(ws).forEach(key => {
+      if (key.startsWith('!')) return;
+      const cell = ws[key];
+      const rowNum = parseInt(key.replace(/^[A-Z]+/, ''), 10);
+
+      if (rowNum === 1) {
+        cell.s = { font: { bold: true, sz: 14, name: 'Calibri' }, alignment: centerAlign };
+      } else if (rowNum === 2) {
+        cell.s = { font: { bold: true, sz: 12, name: 'Calibri' }, alignment: centerAlign };
+      } else if (rowNum === 3) {
+        cell.s = { font: { sz: 10, italic: true, name: 'Calibri' }, alignment: centerAlign };
+      } else if (rowNum === 4) {
+        cell.s = {
+          font: { bold: true, sz: 10, name: 'Calibri' },
+          alignment: centerAlign,
+          fill: { fgColor: { rgb: 'EAEAEA' } },
+          border: {
+            top: { style: 'thin', color: { rgb: 'CCCCCC' } }, bottom: { style: 'thin', color: { rgb: 'CCCCCC' } },
+            left: { style: 'thin', color: { rgb: 'CCCCCC' } }, right: { style: 'thin', color: { rgb: 'CCCCCC' } }
+          }
+        };
+      } else {
+        const firstCellInRow = ws[`A${rowNum}`];
+        const val = firstCellInRow ? String(firstCellInRow.v || '') : '';
+        if (val === 'Grand Total') {
+          cell.s = { font: { bold: true, sz: 10, name: 'Calibri' }, fill: { fgColor: { rgb: 'F5F3FF' } } };
+        } else {
+          const colLetter = key.replace(/[0-9]+/, '');
+          const rightAlignCols = ['I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T'];
+          cell.s = {
+            font: { sz: 9.5, name: 'Calibri' },
+            alignment: rightAlignCols.includes(colLetter) ? { horizontal: 'right' } : undefined
+          };
+        }
+      }
+    });
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Gross_Profit_Report');
+    XLSX.writeFile(wb, `Gross_Profit_Report_${fromDate}_${toDate}.xlsx`);
+    message.success('Gross Profit Report exported successfully!');
+  };
+
   return (
     <div className="animate-fade-in" style={{ paddingBottom: '24px' }}>
       {/* Header */}
@@ -785,8 +963,8 @@ export const Reports: React.FC = () => {
             </div>
           )}
 
-          {/* Category Filter (displayed only on Item Sales tab) */}
-          {activeTab === 'item' && (
+          {/* Category Filter (displayed on Item Sales and Gross Profit tabs) */}
+          {(activeTab === 'item' || activeTab === 'gp') && (
             <div>
               <div style={{ fontSize: '12px', fontWeight: 600, color: '#4b5563', marginBottom: '4px' }}>Product Category</div>
               <Select
@@ -1611,6 +1789,429 @@ export const Reports: React.FC = () => {
               </Spin>
             )
           }
+          // ================= GROSS PROFIT (GP) ANALYSIS TAB =================
+          , {
+            key: 'gp',
+            label: (
+              <span>
+                <DollarCircleOutlined />
+                Gross Profit (GP) Analysis
+              </span>
+            ),
+            children: (
+              <Spin spinning={loading}>
+                {/* 1. Overall GP KPI Cards */}
+                <Row gutter={[16, 16]} style={{ marginBottom: '24px', display: 'flex', flexWrap: 'wrap' }}>
+                  <Col xs={24} sm={12} lg={6} style={{ display: 'flex' }}>
+                    <Card className="glass-card" variant="borderless" style={{ width: '100%', height: '100%' }}>
+                      <Statistic
+                        title="Total Net Revenue"
+                        value={gpData?.summary?.totalRevenue || 0}
+                        precision={2}
+                        suffix={CURRENCY.symbol}
+                        prefix={<DollarOutlined style={{ color: '#10B981' }} />}
+                        styles={{ content: { color: '#10B981', fontWeight: 700 } }}
+                      />
+                      <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '4px' }}>
+                        From {gpData?.summary?.totalUnitsSold?.toLocaleString() || 0} units sold
+                      </div>
+                    </Card>
+                  </Col>
+                  <Col xs={24} sm={12} lg={6} style={{ display: 'flex' }}>
+                    <Card className="glass-card" variant="borderless" style={{ width: '100%', height: '100%' }}>
+                      <Statistic
+                        title="Total Cost of Goods (COGS)"
+                        value={gpData?.summary?.totalCogs || 0}
+                        precision={2}
+                        suffix={CURRENCY.symbol}
+                        prefix={<ShoppingCartOutlined style={{ color: '#F59E0B' }} />}
+                        styles={{ content: { color: '#F59E0B', fontWeight: 700 } }}
+                      />
+                      <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '4px' }}>
+                        Incl. {gpData?.summary?.totalFreeUnits?.toLocaleString() || 0} FOC/promo units
+                      </div>
+                    </Card>
+                  </Col>
+                  <Col xs={24} sm={12} lg={6} style={{ display: 'flex' }}>
+                    <Card className="glass-card" variant="borderless" style={{ width: '100%', height: '100%' }}>
+                      <Statistic
+                        title="Total Gross Profit"
+                        value={gpData?.summary?.totalGrossProfit || 0}
+                        precision={2}
+                        suffix={CURRENCY.symbol}
+                        prefix={(gpData?.summary?.totalGrossProfit || 0) >= 0 ? <RiseOutlined style={{ color: '#6366F1' }} /> : <FallOutlined style={{ color: '#EF4444' }} />}
+                        styles={{ content: { color: (gpData?.summary?.totalGrossProfit || 0) >= 0 ? '#6366F1' : '#EF4444', fontWeight: 800 } }}
+                      />
+                      <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '4px' }}>
+                        Revenue − Total COGS
+                      </div>
+                    </Card>
+                  </Col>
+                  <Col xs={24} sm={12} lg={6} style={{ display: 'flex' }}>
+                    <Card className="glass-card" variant="borderless" style={{ width: '100%', height: '100%' }}>
+                      <Statistic
+                        title="Overall GP Margin"
+                        value={gpData?.summary?.overallGpMargin || 0}
+                        precision={1}
+                        suffix="%"
+                        prefix={<PercentageOutlined style={{ color: (gpData?.summary?.overallGpMargin || 0) >= 20 ? '#10B981' : (gpData?.summary?.overallGpMargin || 0) >= 10 ? '#3B82F6' : '#EF4444' }} />}
+                        styles={{ content: { fontWeight: 800 } }}
+                      />
+                      <div style={{ marginTop: '4px' }}>
+                        <Tag color={(gpData?.summary?.overallGpMargin || 0) >= 30 ? 'green' : (gpData?.summary?.overallGpMargin || 0) >= 15 ? 'blue' : (gpData?.summary?.overallGpMargin || 0) >= 0 ? 'orange' : 'red'} style={{ borderRadius: '8px', border: 'none' }}>
+                          {(gpData?.summary?.overallGpMargin || 0) >= 30 ? 'High Margin' : (gpData?.summary?.overallGpMargin || 0) >= 15 ? 'Healthy Margin' : (gpData?.summary?.overallGpMargin || 0) >= 0 ? 'Low Margin' : 'Operating at Loss'}
+                        </Tag>
+                      </div>
+                    </Card>
+                  </Col>
+                </Row>
+
+                {/* 2. Visual Charts Row */}
+                <Row gutter={[16, 16]} style={{ marginBottom: '24px' }}>
+                  {/* Revenue vs COGS vs Gross Profit Trend */}
+                  <Col xs={24} lg={15}>
+                    <Card title={<span style={{ fontWeight: 700 }}><FundProjectionScreenOutlined style={{ color: '#6366F1', marginRight: 8 }} />Revenue, COGS & Gross Profit Trend</span>} className="glass-card" variant="borderless" style={{ height: '100%' }}>
+                      <div style={{ height: 300 }}>
+                        {gpData?.timeline && gpData.timeline.length > 0 ? (
+                          <ResponsiveContainer width="100%" height={300}>
+                            <BarChart data={gpData.timeline} margin={{ top: 10, right: 30, left: 10, bottom: 0 }}>
+                              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                              <XAxis dataKey="date" tickLine={false} tick={{ fontSize: 10, fill: '#6b7280' }} />
+                              <YAxis tickLine={false} tickFormatter={(v) => formatValue(v)} tick={{ fontSize: 10, fill: '#6b7280' }} />
+                              <Tooltip formatter={(value: any, name: any) => [`${Number(value).toLocaleString()} ${CURRENCY.symbol}`, name]} />
+                              <Legend />
+                              <Bar dataKey="revenue" name="Net Revenue" fill="#10B981" radius={[4, 4, 0, 0]} />
+                              <Bar dataKey="cogs" name="Total COGS" fill="#F59E0B" radius={[4, 4, 0, 0]} />
+                              <Bar dataKey="grossProfit" name="Gross Profit" fill="#6366F1" radius={[4, 4, 0, 0]} />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        ) : (
+                          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
+                            <Text type="secondary">No GP trend data available for this range</Text>
+                          </div>
+                        )}
+                      </div>
+                    </Card>
+                  </Col>
+
+                  {/* Profitability Margin Tier Distribution */}
+                  <Col xs={24} lg={9}>
+                    <Card title={<span style={{ fontWeight: 700 }}>Product Margin Health Share</span>} className="glass-card" variant="borderless" style={{ height: '100%' }}>
+                      <div style={{ height: 300, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                        {gpMarginTierData.length > 0 ? (
+                          <>
+                            <ResponsiveContainer width="100%" height={180}>
+                              <PieChart>
+                                <Pie
+                                  data={gpMarginTierData}
+                                  innerRadius={45}
+                                  outerRadius={75}
+                                  paddingAngle={4}
+                                  dataKey="value"
+                                  nameKey="name"
+                                  stroke="none"
+                                >
+                                  {gpMarginTierData.map((entry, idx) => (
+                                    <Cell key={`cell-${idx}`} fill={entry.color} />
+                                  ))}
+                                </Pie>
+                                <Tooltip formatter={(val: any, name: any) => [`${val} Products`, name]} />
+                              </PieChart>
+                            </ResponsiveContainer>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '0 12px' }}>
+                              {gpMarginTierData.map(item => (
+                                <div key={item.name} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px' }}>
+                                  <Space size={6}>
+                                    <div style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: item.color }}></div>
+                                    <Text type="secondary">{item.name}</Text>
+                                  </Space>
+                                  <Text strong>{item.value} SKUs ({gpData?.products?.length ? Math.round((item.value / gpData.products.length) * 100) : 0}%)</Text>
+                                </div>
+                              ))}
+                            </div>
+                          </>
+                        ) : (
+                          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
+                            <Text type="secondary">No product profitability records available</Text>
+                          </div>
+                        )}
+                      </div>
+                    </Card>
+                  </Col>
+                </Row>
+
+                {/* 3. Product-by-Product GP Table */}
+                <Card
+                  className="glass-card"
+                  variant="borderless"
+                  title={<span style={{ fontWeight: 700, fontSize: '16px' }}>Product-by-Product Gross Profit Performance</span>}
+                  extra={
+                    <Space wrap>
+                      <Input
+                        placeholder="Search product, SKU, code..."
+                        prefix={<SearchOutlined style={{ color: '#9ca3af' }} />}
+                        value={gpSearch}
+                        onChange={(e) => setGpSearch(e.target.value)}
+                        style={{ width: 220, borderRadius: 10 }}
+                        allowClear
+                      />
+                      <Select
+                        value={gpProfitabilityFilter}
+                        onChange={setGpProfitabilityFilter}
+                        style={{ width: 160, borderRadius: 10 }}
+                      >
+                        <Select.Option value="all">All Margins</Select.Option>
+                        <Select.Option value="high_margin">High Margin (≥30%)</Select.Option>
+                        <Select.Option value="profitable">Profitable Only</Select.Option>
+                        <Select.Option value="low_margin">Low Margin (0-15%)</Select.Option>
+                        <Select.Option value="loss">Loss-Making (&lt;0%)</Select.Option>
+                      </Select>
+                      <Button
+                        type="primary"
+                        icon={<DownloadOutlined />}
+                        onClick={handleExportGrossProfitReport}
+                        style={{ background: 'linear-gradient(135deg,#8B5CF6,#6366F1)', border: 'none', borderRadius: 10 }}
+                      >
+                        Export Excel
+                      </Button>
+                    </Space>
+                  }
+                  styles={{ body: { padding: 0 } }}
+                >
+                  <Table
+                    dataSource={filteredGpProducts.map((p: any, idx: number) => ({ ...p, key: p.productId || idx, rank: idx + 1 }))}
+                    pagination={{ pageSize: 15, showSizeChanger: true, pageSizeOptions: ['15', '30', '50', '100'], showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} products` }}
+                    scroll={{ x: 'max-content' }}
+                    size="middle"
+                    columns={[
+                      {
+                        title: '#',
+                        dataIndex: 'rank',
+                        key: 'rank',
+                        width: 55,
+                        fixed: 'left',
+                        render: (v) => <Text type="secondary" strong>{v}</Text>
+                      },
+                      {
+                        title: 'Product Code / SKU',
+                        key: 'code',
+                        width: 140,
+                        fixed: 'left',
+                        render: (_, r: any) => (
+                          <div>
+                            <Text code strong>{r.productCode}</Text>
+                            {r.sku && r.sku !== r.productCode && (
+                              <div><Text type="secondary" style={{ fontSize: '11px' }}>{r.sku}</Text></div>
+                            )}
+                          </div>
+                        )
+                      },
+                      {
+                        title: 'Product Name',
+                        dataIndex: 'productName',
+                        key: 'productName',
+                        width: 220,
+                        fixed: 'left',
+                        render: (v, r: any) => (
+                          <div>
+                            <Text strong style={{ color: '#1f2937' }}>{v}</Text>
+                            {r.supplierName && r.supplierName !== '—' && (
+                              <div><Text type="secondary" style={{ fontSize: '11px' }}>Supplier: {r.supplierName}</Text></div>
+                            )}
+                          </div>
+                        )
+                      },
+                      {
+                        title: 'Category',
+                        dataIndex: 'categoryName',
+                        key: 'categoryName',
+                        width: 120,
+                        render: (v) => <Tag color="purple" style={{ borderRadius: 6, border: 'none' }}>{v}</Tag>
+                      },
+                      {
+                        title: 'Sold Qty',
+                        dataIndex: 'salesQuantity',
+                        key: 'salesQuantity',
+                        width: 100,
+                        sorter: (a: any, b: any) => a.salesQuantity - b.salesQuantity,
+                        render: (v, r: any) => <Text strong>{Number(v).toLocaleString()} {r.uom}</Text>
+                      },
+                      {
+                        title: 'FOC / Free',
+                        key: 'freeQty',
+                        width: 100,
+                        render: (_, r: any) => {
+                          const free = r.focQuantity + r.sampleQuantity + (r.promoQuantity || 0);
+                          return free > 0 ? (
+                            <span style={{ color: '#8B5CF6', fontWeight: 600 }}>{free.toLocaleString()} {r.uom}</span>
+                          ) : (
+                            <Text type="secondary">0</Text>
+                          );
+                        }
+                      },
+                      {
+                        title: (
+                          <AntTooltip title="Total stock consumed: Sold Qty + FOC + Sample + Promo free items">
+                            <span style={{ borderBottom: '1px dashed #9ca3af', cursor: 'help' }}>Inventory Consumed</span>
+                          </AntTooltip>
+                        ),
+                        dataIndex: 'inventoryConsumptionQty',
+                        key: 'inventoryConsumptionQty',
+                        width: 130,
+                        sorter: (a: any, b: any) => (a.inventoryConsumptionQty || a.totalQuantity) - (b.inventoryConsumptionQty || b.totalQuantity),
+                        render: (v, r: any) => (
+                          <span style={{ fontWeight: 700, color: '#374151' }}>
+                            {(v || r.totalQuantity).toLocaleString()} {r.uom}
+                          </span>
+                        )
+                      },
+                      {
+                        title: 'Avg Selling Price',
+                        dataIndex: 'avgSellingPrice',
+                        key: 'avgSellingPrice',
+                        width: 130,
+                        render: (v) => `${Number(v).toLocaleString()} ${CURRENCY.symbol}`
+                      },
+                      {
+                        title: 'Avg COGS / Unit',
+                        dataIndex: 'avgUnitCost',
+                        key: 'avgUnitCost',
+                        width: 140,
+                        render: (v, r: any) => (
+                          <span style={{ color: '#D97706', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                            {Number(v).toLocaleString()} {CURRENCY.symbol}
+                            {r.isCostEstimated && (
+                              <AntTooltip title="Estimated baseline cost (75% base price) because no purchase batch was recorded.">
+                                <Tag color="warning" style={{ fontSize: '10px', padding: '0 4px', margin: 0, borderRadius: 4, cursor: 'help' }}>
+                                  Est.
+                                </Tag>
+                              </AntTooltip>
+                            )}
+                          </span>
+                        )
+                      },
+                      {
+                        title: 'Net Revenue',
+                        dataIndex: 'netRevenue',
+                        key: 'netRevenue',
+                        width: 140,
+                        sorter: (a: any, b: any) => a.netRevenue - b.netRevenue,
+                        render: (v) => <Text strong style={{ color: '#10B981' }}>{Number(v).toLocaleString()} {CURRENCY.symbol}</Text>
+                      },
+                      {
+                        title: 'Total COGS',
+                        dataIndex: 'totalCogs',
+                        key: 'totalCogs',
+                        width: 140,
+                        sorter: (a: any, b: any) => a.totalCogs - b.totalCogs,
+                        render: (v) => <span style={{ color: '#F59E0B', fontWeight: 600 }}>{Number(v).toLocaleString()} {CURRENCY.symbol}</span>
+                      },
+                      {
+                        title: 'Gross Profit (GP)',
+                        dataIndex: 'grossProfit',
+                        key: 'grossProfit',
+                        width: 150,
+                        sorter: (a: any, b: any) => a.grossProfit - b.grossProfit,
+                        render: (v) => {
+                          const num = Number(v);
+                          return (
+                            <Tag
+                              color={num >= 0 ? 'green' : 'red'}
+                              style={{ fontWeight: 700, fontSize: '13px', padding: '3px 8px', borderRadius: 8, border: 'none' }}
+                            >
+                              {num >= 0 ? `+${num.toLocaleString()}` : num.toLocaleString()} {CURRENCY.symbol}
+                            </Tag>
+                          );
+                        }
+                      },
+                      {
+                        title: 'GP Margin',
+                        dataIndex: 'gpMargin',
+                        key: 'gpMargin',
+                        width: 120,
+                        sorter: (a: any, b: any) => a.gpMargin - b.gpMargin,
+                        render: (v) => {
+                          const pct = Number(v);
+                          const tagColor = pct >= 30 ? '#10B981' : pct >= 15 ? '#3B82F6' : pct >= 0 ? '#F59E0B' : '#EF4444';
+                          const bgColor = pct >= 30 ? 'rgba(16,185,129,0.1)' : pct >= 15 ? 'rgba(59,130,246,0.1)' : pct >= 0 ? 'rgba(245,158,11,0.1)' : 'rgba(239,68,68,0.1)';
+                          return (
+                            <span style={{
+                              fontWeight: 700,
+                              color: tagColor,
+                              backgroundColor: bgColor,
+                              padding: '3px 8px',
+                              borderRadius: '8px',
+                              fontSize: '12px',
+                              whiteSpace: 'nowrap'
+                            }}>
+                              {pct > 0 ? `+${pct}%` : `${pct}%`}
+                            </span>
+                          );
+                        }
+                      },
+                      {
+                        title: 'Margin Status',
+                        key: 'status',
+                        width: 130,
+                        render: (_, r: any) => {
+                          const pct = r.gpMargin;
+                          if (pct >= 30) return <Tag color="success" style={{ borderRadius: 6 }}>High Margin</Tag>;
+                          if (pct >= 15) return <Tag color="processing" style={{ borderRadius: 6 }}>Healthy</Tag>;
+                          if (pct >= 0) return <Tag color="warning" style={{ borderRadius: 6 }}>Low Margin</Tag>;
+                          return <Tag color="error" style={{ borderRadius: 6 }}>Loss-Making</Tag>;
+                        }
+                      }
+                    ]}
+                    summary={(pageData) => {
+                      const totalSold = pageData.reduce((s, r) => s + r.salesQuantity, 0);
+                      const totalFree = pageData.reduce((s, r) => s + (r.focQuantity + r.sampleQuantity + (r.promoQuantity || 0)), 0);
+                      const totalConsumed = pageData.reduce((s, r) => s + (r.inventoryConsumptionQty || r.totalQuantity), 0);
+                      const totalRev = pageData.reduce((s, r) => s + r.netRevenue, 0);
+                      const totalCogs = pageData.reduce((s, r) => s + r.totalCogs, 0);
+                      const totalGp = pageData.reduce((s, r) => s + r.grossProfit, 0);
+                      const avgMargin = totalRev > 0 ? ((totalGp / totalRev) * 100).toFixed(1) : '0.0';
+
+                      return (
+                        <Table.Summary.Row style={{ background: '#f5f3ff', fontWeight: 700 }}>
+                          <Table.Summary.Cell index={0} colSpan={4}>
+                            <Text strong style={{ color: '#4F46E5' }}>Page Total ({pageData.length} products)</Text>
+                          </Table.Summary.Cell>
+                          <Table.Summary.Cell index={4}>
+                            <Text strong>{totalSold.toLocaleString()}</Text>
+                          </Table.Summary.Cell>
+                          <Table.Summary.Cell index={5}>
+                            <span style={{ color: '#8B5CF6' }}>{totalFree.toLocaleString()}</span>
+                          </Table.Summary.Cell>
+                          <Table.Summary.Cell index={6}>
+                            <Text strong>{totalConsumed.toLocaleString()}</Text>
+                          </Table.Summary.Cell>
+                          <Table.Summary.Cell index={7} colSpan={2} />
+                          <Table.Summary.Cell index={9}>
+                            <Text strong style={{ color: '#10B981' }}>{totalRev.toLocaleString()} {CURRENCY.symbol}</Text>
+                          </Table.Summary.Cell>
+                          <Table.Summary.Cell index={10}>
+                            <span style={{ color: '#F59E0B' }}>{totalCogs.toLocaleString()} {CURRENCY.symbol}</span>
+                          </Table.Summary.Cell>
+                          <Table.Summary.Cell index={11}>
+                            <span style={{ color: totalGp >= 0 ? '#4F46E5' : '#EF4444' }}>
+                              {totalGp >= 0 ? `+${totalGp.toLocaleString()}` : totalGp.toLocaleString()} {CURRENCY.symbol}
+                            </span>
+                          </Table.Summary.Cell>
+                          <Table.Summary.Cell index={12}>
+                            <span style={{ color: Number(avgMargin) >= 15 ? '#10B981' : '#F59E0B' }}>
+                              {avgMargin}%
+                            </span>
+                          </Table.Summary.Cell>
+                          <Table.Summary.Cell index={13} />
+                        </Table.Summary.Row>
+                      );
+                    }}
+                  />
+                </Card>
+              </Spin>
+            )
+          }
+
           /*
           // ================= MARKETING & PROMO TAB =================
           ,{

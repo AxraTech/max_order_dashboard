@@ -654,7 +654,7 @@ export const PurchaseOrders: React.FC = () => {
         <div style={{ paddingTop: '12px' }}>
           <Text>You are about to check in products from Purchase Order <Text code>{detailPo?.poNumber}</Text> into warehouse <Text strong>{detailPo?.warehouse.name}</Text>.</Text>
           <br />
-          <Text type="secondary">This will automatically increment product stock levels and record batches under FEFO sorting rules.</Text>
+          <Text type="secondary">This will automatically increment product stock levels and record batches under FIFO sorting rules.</Text>
           
           <div style={{ marginTop: '16px' }}>
             <Text strong style={{ fontSize: '12px' }}>Receipt Notes / Batch Details:</Text>

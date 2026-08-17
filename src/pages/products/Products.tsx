@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { Card, Typography, Table, Tag, Input, Select, Space, Row, Col, Tooltip, Button, Modal, Form, InputNumber, Switch, message, Popconfirm, Upload } from 'antd';
-import { SearchOutlined, SafetyCertificateOutlined, ExperimentOutlined, PlusOutlined, EditOutlined, DeleteOutlined, DownloadOutlined, UploadOutlined, FileExcelOutlined } from '@ant-design/icons';
+import dayjs from 'dayjs';
+import { Card, Typography, Table, Tag, Input, Select, Space, Row, Col, Tooltip, Button, Modal, Form, Switch, message, Popconfirm, Upload } from 'antd';
+import { SearchOutlined, PlusOutlined, EditOutlined, DeleteOutlined, DownloadOutlined, UploadOutlined, FileExcelOutlined } from '@ant-design/icons';
 import * as XLSX from 'xlsx-js-style';
 import { api } from '../../services/api';
 import { CURRENCY } from '../../types/index';
@@ -25,16 +26,21 @@ interface ProductItem {
   genericName: string | null;
   brandName: string | null;
   dosageForm: string | null;
-  isScheduled: boolean;
-  isControlled: boolean;
   mustSale: boolean;
-  storageConditions: string | null;
   category: CategoryInfo;
   businessUnitId?: string | null;
   businessUnit?: { id: string; name: string } | null;
   supplierId?: string | null;
   supplier?: { id: string; name: string } | null;
   expiryAlertThreshold: number;
+  activeBatch?: {
+    id: string;
+    batchNumber: string;
+    expiryDate: string;
+    costPrice: number;
+    sellingPrice: number;
+    availableQty: number;
+  } | null;
 }
 
 export const Products: React.FC = () => {
@@ -76,13 +82,12 @@ export const Products: React.FC = () => {
         'Category': p.category.name,
         'Business Unit': p.businessUnit?.name || '—',
         'Dosage Form': p.dosageForm || '—',
+        'Active Batch': p.activeBatch?.batchNumber || '—',
         'Selling Price (MMK)': Number(p.sellingPrice),
         'Dealer Price (MMK)': Number(p.dealerPrice),
         'Base Price (MMK)': Number(p.basePrice),
         'Unit (UOM)': p.uom,
-        'Storage Conditions': p.storageConditions || '—',
-        'Scheduled Drug': p.isScheduled ? 'Yes' : 'No',
-        'Controlled Drug': p.isControlled ? 'Yes' : 'No',
+        'Must Sale': p.mustSale ? 'Yes' : 'No',
       }));
       
       const ws = XLSX.utils.json_to_sheet(data);
@@ -188,14 +193,15 @@ export const Products: React.FC = () => {
     }
   };
 
-  const handleDeleteBU = async (id: string) => {
+  const handleDeleteBU = async (id: string, e?: React.MouseEvent) => {
+    e?.stopPropagation();
     try {
       const res = await api.delete(`/products/business-units/${id}`);
       if (res.data.success) {
         message.success('Business Unit deleted');
         setBusinessUnits(prev => prev.filter(b => b.id !== id));
         if (form.getFieldValue('businessUnitId') === id) {
-          form.setFieldsValue({ businessUnitId: undefined });
+          form.setFieldsValue({ businessUnitId: null });
         }
       }
     } catch (error: any) {
@@ -220,7 +226,7 @@ export const Products: React.FC = () => {
         if (res.data.success) {
           message.success('Category created');
           const newCat = res.data.data;
-          setCategories(prev => [...prev, newCat]);
+          setCategories((prev) => [...prev, newCat]);
           form.setFieldsValue({ categoryId: newCat.id });
           setNewCategoryName('');
         }
@@ -232,18 +238,19 @@ export const Products: React.FC = () => {
     }
   };
 
-  const handleDeleteCategory = async (id: string) => {
+  const handleDeleteCategory = async (id: string, e?: React.MouseEvent) => {
+    e?.stopPropagation();
     try {
       const res = await api.delete(`/products/categories/${id}`);
       if (res.data.success) {
         message.success('Category deleted');
         setCategories(prev => prev.filter(c => c.id !== id));
         if (form.getFieldValue('categoryId') === id) {
-          form.setFieldsValue({ categoryId: undefined });
+          form.setFieldsValue({ categoryId: null });
         }
       }
     } catch (error: any) {
-      message.error(error.response?.data?.message || 'Failed to delete category (it may contain products)');
+      message.error(error.response?.data?.message || 'Failed to delete category');
     }
   };
 
@@ -261,10 +268,11 @@ export const Products: React.FC = () => {
       });
       if (res.data.success) {
         setProducts(res.data.data);
-        setTotalItems(res.data.meta?.total || 0);
+        setTotalItems(res.data.meta.total);
       }
     } catch (error) {
       console.error('Failed to fetch products:', error);
+      message.error('Failed to load products');
     } finally {
       setLoading(false);
     }
@@ -313,9 +321,6 @@ export const Products: React.FC = () => {
       sellingPrice: record.sellingPrice,
       dealerPrice: record.dealerPrice,
       uom: record.uom,
-      storageConditions: record.storageConditions,
-      isScheduled: record.isScheduled,
-      isControlled: record.isControlled,
       mustSale: record.mustSale || false,
       expiryAlertThreshold: record.expiryAlertThreshold,
     });
@@ -369,16 +374,9 @@ export const Products: React.FC = () => {
       title: 'Category',
       key: 'category',
       render: (_: any, record: ProductItem) => (
-        <Space orientation="vertical" size={2}>
-          <Tag color="blue" style={{ border: 'none', borderRadius: '8px', margin: 0 }}>
-            {record.category.name}
-          </Tag>
-          {record.dosageForm && (
-            <Text type="secondary" style={{ fontSize: '11px' }}>
-              Form: {record.dosageForm}
-            </Text>
-          )}
-        </Space>
+        <Tag color="blue" style={{ border: 'none', borderRadius: '8px' }}>
+          {record.category.name}
+        </Tag>
       ),
     },
     {
@@ -396,22 +394,41 @@ export const Products: React.FC = () => {
       title: 'Base Price',
       dataIndex: 'basePrice',
       key: 'basePrice',
-      render: (price: number) => (
-        <strong style={{ color: 'var(--primary-color)' }}>
-          {price.toLocaleString()} {CURRENCY.symbol}
-        </strong>
+      render: (price: number, record: ProductItem) => (
+        <div>
+          <strong style={{ color: 'var(--primary-color)', display: 'block' }}>
+            {price.toLocaleString()} {CURRENCY.symbol}
+          </strong>
+          {record.activeBatch && (
+            <Text type="secondary" style={{ fontSize: '10px' }}>
+              Batch Cost
+            </Text>
+          )}
+        </div>
       ),
     }] : []),
     {
       title: 'Selling Price',
       dataIndex: 'sellingPrice',
       key: 'sellingPrice',
-      render: (price: number) => (
-        <strong style={{ color: '#10B981' }}>
-          {price ? price.toLocaleString() : '0'} {CURRENCY.symbol}
-        </strong>
+      render: (price: number, record: ProductItem) => (
+        <div>
+          <strong style={{ color: '#10B981', display: 'block' }}>
+            {price ? price.toLocaleString() : '0'} {CURRENCY.symbol}
+          </strong>
+          {record.activeBatch ? (
+            <Tooltip title={`FIFO Active Batch: ${record.activeBatch.batchNumber} (Expires: ${dayjs(record.activeBatch.expiryDate).format('DD/MM/YYYY')}, Available: ${record.activeBatch.availableQty} ${record.uom})`}>
+              <Tag color="cyan" style={{ border: 'none', borderRadius: '6px', fontSize: '10px', marginTop: '2px', cursor: 'help' }}>
+                Batch: {record.activeBatch.batchNumber}
+              </Tag>
+            </Tooltip>
+          ) : (
+            <Text type="secondary" style={{ fontSize: '10px' }}>Master Price</Text>
+          )}
+        </div>
       ),
     },
+    /*
     {
       title: 'Dealer Price',
       dataIndex: 'dealerPrice',
@@ -422,39 +439,14 @@ export const Products: React.FC = () => {
         </strong>
       ),
     },
+    */
     {
       title: 'Unit (UOM)',
       dataIndex: 'uom',
       key: 'uom',
       render: (uom: string) => <Tag style={{ borderRadius: '8px' }}>{uom}</Tag>,
     },
-    {
-      title: 'Storage & Control',
-      key: 'conditions',
-      render: (_: any, record: ProductItem) => (
-        <Space size={4} wrap>
-          {record.storageConditions && (
-            <Tag color={record.storageConditions.toLowerCase().includes('cold') ? 'blue' : 'default'} style={{ border: 'none', borderRadius: '8px' }}>
-              {record.storageConditions}
-            </Tag>
-          )}
-          {record.isScheduled && (
-            <Tooltip title="Scheduled drug (prescription required)">
-              <Tag color="orange" icon={<SafetyCertificateOutlined />} style={{ border: 'none', borderRadius: '8px' }}>
-                Scheduled
-              </Tag>
-            </Tooltip>
-          )}
-          {record.isControlled && (
-            <Tooltip title="Controlled pharmaceutical substance">
-              <Tag color="red" icon={<ExperimentOutlined />} style={{ border: 'none', borderRadius: '8px' }}>
-                Controlled
-              </Tag>
-            </Tooltip>
-          )}
-        </Space>
-      ),
-    },
+
     {
       title: 'Actions',
       key: 'actions',
@@ -531,7 +523,8 @@ export const Products: React.FC = () => {
               description: getVal(['description', 'desc']),
               genericName: getVal(['generic name', 'generic']),
               brandName: getVal(['brand name', 'brand']),
-              dosageForm: getVal(['dosage form', 'dosage'])
+              dosageForm: getVal(['dosage form', 'dosage']),
+              mustSale: ['yes', 'true', '1'].includes(String(getVal(['must sale', 'mustsale', 'must_sale']) || '').toLowerCase().trim())
             });
           }
         }
@@ -943,40 +936,15 @@ export const Products: React.FC = () => {
             </Col>
           </Row>
 
-          <Row gutter={16}>
-            {isSuperAdmin && (
-              <Col span={12}>
-                <Form.Item
-                  name="basePrice"
-                  label="Base Price (MMK)"
-                  rules={[{ required: true, message: 'Please input base price!' }]}
-                >
-                  <InputNumber min={0} style={{ width: '100%', borderRadius: '8px' }} placeholder="Base price" />
-                </Form.Item>
-              </Col>
-            )}
-            <Col span={isSuperAdmin ? 12 : 24}>
-              <Form.Item
-                name="sellingPrice"
-                label="Selling Price (MMK)"
-                rules={[{ required: true, message: 'Please input selling price!' }]}
-              >
-                <InputNumber min={0} style={{ width: '100%', borderRadius: '8px' }} placeholder="Selling price" />
-              </Form.Item>
-            </Col>
-          </Row>
+          {/* Pricing is managed batch-by-batch in Inventory Control */}
+          {/* 
+          <Form.Item name="dealerPrice" label="Dealer Price (MMK)">
+            <InputNumber min={0} style={{ width: '100%', borderRadius: '8px' }} placeholder="Dealer price" />
+          </Form.Item>
+          */}
 
           <Row gutter={16}>
-            <Col span={12}>
-              <Form.Item
-                name="dealerPrice"
-                label="Dealer Price (MMK)"
-                rules={[{ required: true, message: 'Please input dealer price!' }]}
-              >
-                <InputNumber min={0} style={{ width: '100%', borderRadius: '8px' }} placeholder="Dealer price" />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
+            <Col span={24}>
               <Form.Item
                 name="uom"
                 label="Unit of Measure (UOM)"
@@ -988,22 +956,7 @@ export const Products: React.FC = () => {
           </Row>
 
           <Row gutter={16}>
-            <Col span={12}>
-              <Form.Item name="storageConditions" label="Storage Conditions">
-                <Input placeholder="e.g. Cold Chain (2°C - 8°C)" style={{ borderRadius: '8px' }} />
-              </Form.Item>
-            </Col>
-            <Col span={8}>
-              <Form.Item name="isScheduled" label="Scheduled Drug" valuePropName="checked">
-                <Switch />
-              </Form.Item>
-            </Col>
-            <Col span={8}>
-              <Form.Item name="isControlled" label="Controlled Drug" valuePropName="checked">
-                <Switch />
-              </Form.Item>
-            </Col>
-            <Col span={8}>
+            <Col span={24}>
               <Form.Item name="mustSale" label="Must Sale Feature" valuePropName="checked">
                 <Switch />
               </Form.Item>

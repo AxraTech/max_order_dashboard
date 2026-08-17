@@ -328,7 +328,7 @@ export const Transfers: React.FC = () => {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
         <div>
           <Title level={2} style={{ margin: 0, fontWeight: 700 }}>Inter-Branch Stock Transfers</Title>
-          <Text type="secondary">Manage inventory transfers, approvals, and FEFO routing between regional branches</Text>
+          <Text type="secondary">Manage inventory transfers, approvals, and FIFO routing between regional branches</Text>
         </div>
         <Space>
           <Button icon={<ReloadOutlined />} onClick={fetchTransfers} style={{ borderRadius: '12px' }}>Refresh</Button>
