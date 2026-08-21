@@ -578,7 +578,7 @@ export const Products: React.FC = () => {
         <Space>
           <Button 
             href="/templates/Product_Import_Template.xlsx" 
-            target="_blank" 
+            download="Product_Import_Template.xlsx"
             icon={<FileExcelOutlined />} 
             style={{ borderRadius: '12px' }}
           >

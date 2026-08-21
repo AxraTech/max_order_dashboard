@@ -93,7 +93,15 @@ export const Inventory: React.FC = () => {
   // Tracks existing selling price when re-stocking a known product
   const [existingSellingPrice, setExistingSellingPrice] = useState<number | null>(null);
   const [categories, setCategories] = useState<any[]>([]);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [creatingCategory, setCreatingCategory] = useState(false);
+  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
+
   const [businessUnits, setBusinessUnits] = useState<any[]>([]);
+  const [newBUName, setNewBUName] = useState('');
+  const [creatingBU, setCreatingBU] = useState(false);
+  const [editingBUId, setEditingBUId] = useState<string | null>(null);
+
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [showNewProductDetails, setShowNewProductDetails] = useState(false);
   const [isCustomProduct, setIsCustomProduct] = useState(false);
@@ -404,6 +412,96 @@ export const Inventory: React.FC = () => {
       if (res.data.success) setSuppliers(res.data.data);
     } catch (e) {
       console.error(e);
+    }
+  };
+
+  const handleSaveBU = async () => {
+    if (!newBUName.trim()) return;
+    try {
+      setCreatingBU(true);
+      if (editingBUId) {
+        const res = await api.put(`/products/business-units/${editingBUId}`, { name: newBUName.trim() });
+        if (res.data.success) {
+          message.success('Business Unit updated');
+          setBusinessUnits(prev => prev.map(b => b.id === editingBUId ? { ...b, name: res.data.data.name } : b));
+          setEditingBUId(null);
+          setNewBUName('');
+        }
+      } else {
+        const res = await api.post('/products/business-units', { name: newBUName.trim() });
+        if (res.data.success) {
+          message.success('Business Unit created');
+          const newUnit = res.data.data;
+          setBusinessUnits((prev) => [...prev, newUnit]);
+          form.setFieldsValue({ businessUnitId: newUnit.id });
+          setNewBUName('');
+        }
+      }
+    } catch (error: any) {
+      message.error(error.response?.data?.message || 'Failed to save business unit');
+    } finally {
+      setCreatingBU(false);
+    }
+  };
+
+  const handleDeleteBU = async (id: string, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    try {
+      const res = await api.delete(`/products/business-units/${id}`);
+      if (res.data.success) {
+        message.success('Business Unit deleted');
+        setBusinessUnits(prev => prev.filter(b => b.id !== id));
+        if (form.getFieldValue('businessUnitId') === id) {
+          form.setFieldsValue({ businessUnitId: null });
+        }
+      }
+    } catch (error: any) {
+      message.error(error.response?.data?.message || 'Failed to delete business unit');
+    }
+  };
+
+  const handleSaveCategory = async () => {
+    if (!newCategoryName.trim()) return;
+    try {
+      setCreatingCategory(true);
+      if (editingCategoryId) {
+        const res = await api.put(`/products/categories/${editingCategoryId}`, { name: newCategoryName.trim() });
+        if (res.data.success) {
+          message.success('Category updated');
+          setCategories(prev => prev.map(c => c.id === editingCategoryId ? { ...c, name: res.data.data.name } : c));
+          setEditingCategoryId(null);
+          setNewCategoryName('');
+        }
+      } else {
+        const res = await api.post('/products/categories', { name: newCategoryName.trim() });
+        if (res.data.success) {
+          message.success('Category created');
+          const newCat = res.data.data;
+          setCategories((prev) => [...prev, newCat]);
+          form.setFieldsValue({ categoryId: newCat.id });
+          setNewCategoryName('');
+        }
+      }
+    } catch (error: any) {
+      message.error(error.response?.data?.message || 'Failed to save category');
+    } finally {
+      setCreatingCategory(false);
+    }
+  };
+
+  const handleDeleteCategory = async (id: string, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    try {
+      const res = await api.delete(`/products/categories/${id}`);
+      if (res.data.success) {
+        message.success('Category deleted');
+        setCategories(prev => prev.filter(c => c.id !== id));
+        if (form.getFieldValue('categoryId') === id) {
+          form.setFieldsValue({ categoryId: null });
+        }
+      }
+    } catch (error: any) {
+      message.error(error.response?.data?.message || 'Failed to delete category');
     }
   };
 
@@ -975,7 +1073,7 @@ export const Inventory: React.FC = () => {
           </Button>
           <Button
             href="/templates/Inventory_Import_Template.xlsx"
-            target="_blank"
+            download="Inventory_Import_Template.xlsx"
             icon={<FileExcelOutlined />}
             style={{ borderRadius: '12px' }}
           >
@@ -1128,6 +1226,10 @@ export const Inventory: React.FC = () => {
           setIsModalOpen(false);
           form.resetFields();
           setExistingSellingPrice(null);
+          setEditingCategoryId(null);
+          setNewCategoryName('');
+          setEditingBUId(null);
+          setNewBUName('');
         }}
         footer={null}
         width={760}
@@ -1288,11 +1390,74 @@ export const Inventory: React.FC = () => {
                             placeholder="Select Category"
                             allowClear
                             showSearch
-                            optionFilterProp="children"
+                            optionFilterProp="label"
                             style={{ borderRadius: '8px' }}
+                            dropdownRender={(menu) => (
+                              <>
+                                {menu}
+                                <div style={{ display: 'flex', flexWrap: 'nowrap', padding: '8px', borderTop: '1px solid #f0f0f0', gap: '8px' }}>
+                                  <Input
+                                    placeholder={editingCategoryId ? "Edit category name..." : "Add new category..."}
+                                    value={newCategoryName}
+                                    onChange={(e) => setNewCategoryName(e.target.value)}
+                                    onKeyDown={(e) => {
+                                      e.stopPropagation();
+                                      if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        handleSaveCategory();
+                                      }
+                                    }}
+                                    style={{ flex: 'auto' }}
+                                  />
+                                  <Button
+                                    type="primary"
+                                    onClick={handleSaveCategory}
+                                    loading={creatingCategory}
+                                    style={{ flex: 'none' }}
+                                  >
+                                    {editingCategoryId ? 'Save' : 'Add'}
+                                  </Button>
+                                  {editingCategoryId && (
+                                    <Button
+                                      onClick={() => {
+                                        setEditingCategoryId(null);
+                                        setNewCategoryName('');
+                                      }}
+                                      style={{ flex: 'none' }}
+                                    >
+                                      Cancel
+                                    </Button>
+                                  )}
+                                </div>
+                              </>
+                            )}
                           >
                             {categories.map(c => (
-                              <Select.Option key={c.id} value={c.id}>{c.name}</Select.Option>
+                              <Select.Option key={c.id} value={c.id} label={c.name}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                                  <span>{c.name}</span>
+                                  <div onClick={(e) => e.stopPropagation()} style={{ display: 'flex', gap: '4px' }}>
+                                    <Button
+                                      type="text"
+                                      size="small"
+                                      icon={<EditOutlined style={{ color: '#0284c7', fontSize: '12px' }} />}
+                                      onClick={() => {
+                                        setEditingCategoryId(c.id);
+                                        setNewCategoryName(c.name);
+                                      }}
+                                      style={{ height: '22px', width: '22px', padding: 0 }}
+                                    />
+                                    <Button
+                                      type="text"
+                                      danger
+                                      size="small"
+                                      icon={<DeleteOutlined style={{ fontSize: '12px' }} />}
+                                      onClick={() => handleDeleteCategory(c.id)}
+                                      style={{ height: '22px', width: '22px', padding: 0 }}
+                                    />
+                                  </div>
+                                </div>
+                              </Select.Option>
                             ))}
                           </Select>
                         </Form.Item>
@@ -1303,11 +1468,74 @@ export const Inventory: React.FC = () => {
                             placeholder="Select Business Unit"
                             allowClear
                             showSearch
-                            optionFilterProp="children"
+                            optionFilterProp="label"
                             style={{ borderRadius: '8px' }}
+                            dropdownRender={(menu) => (
+                              <>
+                                {menu}
+                                <div style={{ display: 'flex', flexWrap: 'nowrap', padding: '8px', borderTop: '1px solid #f0f0f0', gap: '8px' }}>
+                                  <Input
+                                    placeholder={editingBUId ? "Edit unit name..." : "Add new unit..."}
+                                    value={newBUName}
+                                    onChange={(e) => setNewBUName(e.target.value)}
+                                    onKeyDown={(e) => {
+                                      e.stopPropagation();
+                                      if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        handleSaveBU();
+                                      }
+                                    }}
+                                    style={{ flex: 'auto' }}
+                                  />
+                                  <Button
+                                    type="primary"
+                                    onClick={handleSaveBU}
+                                    loading={creatingBU}
+                                    style={{ flex: 'none' }}
+                                  >
+                                    {editingBUId ? 'Save' : 'Add'}
+                                  </Button>
+                                  {editingBUId && (
+                                    <Button
+                                      onClick={() => {
+                                        setEditingBUId(null);
+                                        setNewBUName('');
+                                      }}
+                                      style={{ flex: 'none' }}
+                                    >
+                                      Cancel
+                                    </Button>
+                                  )}
+                                </div>
+                              </>
+                            )}
                           >
                             {businessUnits.map(b => (
-                              <Select.Option key={b.id} value={b.id}>{b.name}</Select.Option>
+                              <Select.Option key={b.id} value={b.id} label={b.name}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                                  <span>{b.name}</span>
+                                  <div onClick={(e) => e.stopPropagation()} style={{ display: 'flex', gap: '4px' }}>
+                                    <Button
+                                      type="text"
+                                      size="small"
+                                      icon={<EditOutlined style={{ color: '#0284c7', fontSize: '12px' }} />}
+                                      onClick={() => {
+                                        setEditingBUId(b.id);
+                                        setNewBUName(b.name);
+                                      }}
+                                      style={{ height: '22px', width: '22px', padding: 0 }}
+                                    />
+                                    <Button
+                                      type="text"
+                                      danger
+                                      size="small"
+                                      icon={<DeleteOutlined style={{ fontSize: '12px' }} />}
+                                      onClick={() => handleDeleteBU(b.id)}
+                                      style={{ height: '22px', width: '22px', padding: 0 }}
+                                    />
+                                  </div>
+                                </div>
+                              </Select.Option>
                             ))}
                           </Select>
                         </Form.Item>
