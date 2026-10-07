@@ -5,8 +5,10 @@ import {
 } from 'antd';
 import {
   SearchOutlined, ReloadOutlined, EyeOutlined, CloseCircleOutlined,
-  CheckCircleOutlined, MoreOutlined,
+  CheckCircleOutlined, MoreOutlined, FileExcelOutlined,
 } from '@ant-design/icons';
+import * as XLSX from 'xlsx';
+import dayjs from 'dayjs';
 import { api } from '../../services/api';
 import { CURRENCY } from '../../types/index';
 import type { OrderStatus } from '../../types/index';
@@ -57,7 +59,61 @@ export const Orders: React.FC = () => {
   const [detailOrder, setDetailOrder] = useState<OrderRecord | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
+  const [exportLoading, setExportLoading] = useState(false);
   const { user } = useAuthStore();
+
+  const handleExportExcel = async () => {
+    try {
+      setExportLoading(true);
+      message.loading({ content: 'Exporting orders to Excel...', key: 'exportOrders' });
+      const res = await api.get('/orders', {
+        params: {
+          page: 1,
+          limit: 10000,
+          search: search || undefined,
+          status: statusFilter || undefined,
+        },
+      });
+
+      if (!res.data.success || !Array.isArray(res.data.data) || res.data.data.length === 0) {
+        message.warning({ content: 'No orders data to export', key: 'exportOrders' });
+        return;
+      }
+
+      const rows = res.data.data.map((o: any, index: number) => ({
+        'No.': index + 1,
+        'Order Number': o.orderNumber || '',
+        'Order Date': dayjs(o.orderDate).format('YYYY-MM-DD HH:mm'),
+        'Status': (o.status || '').replace(/_/g, ' '),
+        'Customer Code': o.customer?.code || '',
+        'Customer Name': o.customer?.name || '',
+        'Phone Number': o.phone || '',
+        'Delivery Address': o.deliveryAddress || '',
+        'Branch': o.branch?.name || '',
+        'Sales Representative': o.salesRep?.user ? `${o.salesRep.user.firstName} ${o.salesRep.user.lastName}` : (o.salesRep?.code || '—'),
+        'Items Count': o.items?.length || 0,
+        'Subtotal (MMK)': Math.round(Number(o.subtotal || 0)),
+        'Discount (MMK)': Math.round(Number(o.discount || 0)),
+        'Tax (MMK)': Math.round(Number(o.tax || 0)),
+        'Total Amount (MMK)': Math.round(Number(o.totalAmount || 0)),
+        'Payment Method': o.paymentMethod || '—',
+        'Payment Amount (MMK)': o.paymentAmount ? Math.round(Number(o.paymentAmount)) : 0,
+        'Payment Reference': o.paymentReference || '',
+        'Notes': o.notes || '',
+      }));
+
+      const ws = XLSX.utils.json_to_sheet(rows);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Orders');
+      XLSX.writeFile(wb, `Orders_Export_${dayjs().format('YYYYMMDD_HHmmss')}.xlsx`);
+      message.success({ content: `Successfully exported ${rows.length} orders!`, key: 'exportOrders' });
+    } catch (err: any) {
+      console.error(err);
+      message.error({ content: err?.response?.data?.message || 'Failed to export orders', key: 'exportOrders' });
+    } finally {
+      setExportLoading(false);
+    }
+  };
 
   const fetchOrders = useCallback(async () => {
     try {
@@ -256,7 +312,17 @@ export const Orders: React.FC = () => {
           <Title level={2} style={{ margin: 0, fontWeight: 700 }}>All Orders</Title>
           <Text type="secondary">View and manage all orders across branches</Text>
         </div>
-        <Button icon={<ReloadOutlined />} onClick={fetchOrders} style={{ borderRadius: '12px' }}>Refresh</Button>
+        <Space wrap>
+          <Button
+            icon={<FileExcelOutlined />}
+            onClick={handleExportExcel}
+            loading={exportLoading}
+            style={{ borderRadius: '12px', color: '#16A34A', borderColor: '#86EFAC', fontWeight: 600 }}
+          >
+            Export Excel
+          </Button>
+          <Button icon={<ReloadOutlined />} onClick={fetchOrders} style={{ borderRadius: '12px' }}>Refresh</Button>
+        </Space>
       </div>
 
       <Card className="glass-card" variant="borderless" style={{ marginBottom: '20px' }}>

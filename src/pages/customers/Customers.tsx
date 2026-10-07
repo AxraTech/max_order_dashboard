@@ -10,7 +10,7 @@ import {
   DeleteOutlined, PhoneOutlined, MailOutlined, CheckCircleOutlined,
   UploadOutlined, DownloadOutlined, InboxOutlined, CheckCircleFilled,
   CalendarOutlined, EnvironmentOutlined, DollarOutlined,
-  UserOutlined, IdcardOutlined,
+  UserOutlined, IdcardOutlined, FileExcelOutlined,
 } from '@ant-design/icons';
 import * as XLSX from 'xlsx';
 import dayjs from 'dayjs';
@@ -139,6 +139,75 @@ export const Customers: React.FC = () => {
   const [detailCustomer, setDetailCustomer] = useState<CustomerRecord | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
 
+  // Export Customers to Excel
+  const [exportLoading, setExportLoading] = useState(false);
+  const handleExportExcel = async () => {
+    try {
+      setExportLoading(true);
+      message.loading({ content: 'Exporting customers to Excel...', key: 'exportCust' });
+      const res = await api.get('/customers', {
+        params: {
+          page: 1,
+          limit: 10000,
+          search: search || undefined,
+          category: categoryFilter !== 'all' ? categoryFilter : undefined,
+          branchId: branchFilter !== 'all' ? branchFilter : undefined,
+          territoryId: territoryFilter !== 'all' ? territoryFilter : undefined,
+          isActive: activeFilter !== 'all' ? String(activeFilter === 'active') : undefined,
+        },
+      });
+
+      if (!res.data.success || !res.data.data || res.data.data.length === 0) {
+        message.warning({ content: 'No customer data found to export', key: 'exportCust' });
+        return;
+      }
+
+      const rawList = res.data.data;
+      const exportData = rawList.map((c: any, index: number) => {
+        const primarySR = c.customerSalesReps?.find((csr: any) => csr.isPrimary)?.salesRep || c.customerSalesReps?.[0]?.salesRep;
+        const srName = primarySR?.user ? `${primarySR.user.firstName} ${primarySR.user.lastName}` : (primarySR?.code || '');
+        return {
+          'No': index + 1,
+          'Customer Code': c.code,
+          'Customer Name': c.name,
+          'Category': c.category || '',
+          'Contact Person': c.contactPerson || '',
+          'Phone': c.phone || '',
+          'Email': c.email || '',
+          'Address': c.address || '',
+          'Township': c.township || '',
+          'City': c.city || '',
+          'District': c.district || '',
+          'Region': c.region || '',
+          'Territory': c.territory?.name || '',
+          'Branch': c.branch?.name || c.branchCode || '',
+          'Division': c.division || '',
+          'Receipt Type': c.receiptType || '',
+          'Payment Term': c.creditTerm || (c.paymentTermDays ? `${c.paymentTermDays} Days` : ''),
+          'Credit Limit': c.creditLimit?.creditLimit != null ? Number(c.creditLimit.creditLimit) : '',
+          'Outstanding Balance': c.creditLimit?.outstandingBalance != null ? Number(c.creditLimit.outstandingBalance) : 0,
+          'Credit Status': c.creditLimit?.status || '',
+          'Main Channel': c.mainChannel?.name || c.type || '',
+          'Sub Channel': c.subChannel?.name || c.cusType1 || '',
+          'Sales Rep': srName,
+          'Status': c.isActive ? 'Active' : 'Inactive',
+        };
+      });
+
+      const ws = XLSX.utils.json_to_sheet(exportData);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Customers');
+      const filename = `Customers_Export_${dayjs().format('YYYYMMDD_HHmmss')}.xlsx`;
+      XLSX.writeFile(wb, filename);
+      message.success({ content: `Successfully exported ${exportData.length} customers!`, key: 'exportCust' });
+    } catch (err: any) {
+      console.error(err);
+      message.error({ content: 'Failed to export customers to Excel', key: 'exportCust' });
+    } finally {
+      setExportLoading(false);
+    }
+  };
+
   // Download Sample Customer Template
   const handleDownloadTemplate = () => {
     const templateHeaders = [
@@ -193,13 +262,13 @@ export const Customers: React.FC = () => {
   useEffect(() => {
     api.get('/territories').then(res => {
       if (res.data.success) setTerritories(res.data.data);
-    }).catch(() => {});
+    }).catch(() => { });
     api.get('/branches').then(res => {
       if (res.data.success) setBranches(res.data.data);
-    }).catch(() => {});
+    }).catch(() => { });
     api.get('/channels/main').then(res => {
       if (res.data.success) setMainChannels(res.data.data);
-    }).catch(() => {});
+    }).catch(() => { });
   }, []);
 
   // Fetch customers
@@ -229,7 +298,7 @@ export const Customers: React.FC = () => {
   }, [currentPage, pageSize, search, categoryFilter, branchFilter, territoryFilter, activeFilter]);
 
   useEffect(() => { fetchCustomers(); }, [fetchCustomers]);
-  
+
   useEffect(() => {
     const handleUpdate = () => {
       fetchCustomers();
@@ -395,8 +464,8 @@ export const Customers: React.FC = () => {
           <Space size={4} wrap>
             <Tag color={
               record.category === 'VIP' ? 'gold' :
-              record.category === 'WHOLESALE' ? 'blue' :
-              record.category === 'DEALER' ? 'purple' : 'default'
+                record.category === 'WHOLESALE' ? 'blue' :
+                  record.category === 'DEALER' ? 'purple' : 'default'
             } style={{ borderRadius: '6px', fontSize: '11px', fontWeight: 600, border: 'none', margin: 0 }}>
               {record.category}
             </Tag>
@@ -660,6 +729,14 @@ export const Customers: React.FC = () => {
           <Text type="secondary">Manage customer accounts, credit limits, and excel batch imports</Text>
         </div>
         <Space size="middle" wrap>
+          <Button
+            icon={<FileExcelOutlined />}
+            onClick={handleExportExcel}
+            loading={exportLoading}
+            style={{ borderRadius: '12px', color: '#16A34A', borderColor: '#86EFAC', fontWeight: 600 }}
+          >
+            Export Excel
+          </Button>
           <Button
             icon={<DownloadOutlined />}
             onClick={handleDownloadTemplate}
@@ -1313,7 +1390,7 @@ export const Customers: React.FC = () => {
               <Descriptions.Item label="Region">{detailCustomer.region || '—'}</Descriptions.Item>
               <Descriptions.Item label="District">{detailCustomer.district || '—'}</Descriptions.Item>
               <Descriptions.Item label="Street Address" span={2}>{detailCustomer.address || '—'}</Descriptions.Item>
-              
+
               <Descriptions.Item label="Main Channel">
                 {detailCustomer.mainChannel
                   ? <Tag color="geekblue" style={{ borderRadius: '8px', border: 'none', fontWeight: 600 }}>{detailCustomer.mainChannel.name}</Tag>
