@@ -61,7 +61,7 @@ export const Products: React.FC = () => {
       const res = await api.get('/products', {
         params: {
           page: 1,
-          limit: 5000,
+          limit: 15000,
           search: search || undefined,
           categoryId: selectedCategory === 'all' ? undefined : selectedCategory,
           businessUnitId: selectedBusinessUnit === 'all' ? undefined : selectedBusinessUnit,

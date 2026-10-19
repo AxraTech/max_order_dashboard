@@ -3,13 +3,13 @@ import React, { useCallback, useEffect, useState } from 'react';
 import html2pdf from 'html2pdf.js';
 import {
   Button, Card, Dropdown, Form, Input, InputNumber, Modal,
-  Select, Space, Table, Tag, Typography, Badge, DatePicker, Popconfirm, Empty, App, Row, Col, Divider
+  Select, Space, Table, Tag, Typography, Badge, DatePicker, Popconfirm, Empty, App, Row, Col, Divider, Segmented
 } from 'antd';
 import {
   DollarOutlined, EyeOutlined, ReloadOutlined, SendOutlined,
   CheckCircleOutlined, CloseCircleOutlined,
   FilePdfOutlined, BankOutlined, MoreOutlined,
-  DownloadOutlined, PhoneOutlined, MailOutlined, EnvironmentOutlined, EditOutlined
+  DownloadOutlined, PhoneOutlined, MailOutlined, EnvironmentOutlined, EditOutlined, PrinterOutlined
 } from '@ant-design/icons';
 import { api } from '../../services/api';
 import { CURRENCY } from '../../types/index';
@@ -117,17 +117,21 @@ export const Invoices: React.FC = () => {
   const [editTotals, setEditTotals] = useState({ subtotal: 0, tax: 0, discount: 0, manualDiscount: 0, cashback: 0, partnerCommission: 0, totalAmount: 0, balanceDue: 0 });
   const canEditInvoice = user?.role?.name === 'SUPER_ADMIN' || user?.role?.name === 'ACCOUNTANT';
 
-  const handleDownloadPDF = () => {
+  type InvoiceCopyType = 'ORIGINAL' | 'WAREHOUSE' | 'SALES_REP';
+  const [activeCopy, setActiveCopy] = useState<InvoiceCopyType>('ORIGINAL');
+
+  const handleDownloadPDF = (copyType: InvoiceCopyType = activeCopy) => {
     if (!detail) return;
     const element = document.getElementById(`invoice-print-${detail.id}`);
     if (!element) return;
 
+    const copySuffix = copyType === 'WAREHOUSE' ? 'WAREHOUSE-COPY' : copyType === 'SALES_REP' ? 'SR-COPY' : 'ORIGINAL';
     const msgKey = 'download-pdf';
-    message.loading({ content: 'Generating PDF download...', key: msgKey });
+    message.loading({ content: `Generating ${copySuffix} PDF download...`, key: msgKey });
 
     const opt = {
-      margin:       [0.3, 0.3, 0.3, 0.3],
-      filename:     `Invoice-${detail.invoiceNumber}.pdf`,
+      margin:       [0.25, 0.25, 0.25, 0.25],
+      filename:     `Invoice-${detail.invoiceNumber}-${copySuffix}.pdf`,
       image:        { type: 'jpeg', quality: 0.98 },
       html2canvas:  { scale: 2.5, useCORS: true, letterRendering: true },
       jsPDF:        { unit: 'in', format: 'a4', orientation: 'portrait' }
@@ -135,11 +139,15 @@ export const Invoices: React.FC = () => {
 
     // @ts-ignore
     html2pdf().set(opt).from(element).save().then(() => {
-      message.success({ content: 'PDF downloaded successfully!', key: msgKey });
+      message.success({ content: `${copySuffix} PDF downloaded successfully!`, key: msgKey });
     }).catch((err: any) => {
       console.error(err);
       message.error({ content: 'Failed to generate PDF download', key: msgKey });
     });
+  };
+
+  const handlePrint = () => {
+    window.print();
   };
 
   const fetchInvoices = useCallback(async () => {
@@ -154,8 +162,6 @@ export const Invoices: React.FC = () => {
       }
     } catch { } finally { setLoading(false); }
   }, [page, pageSize, status, search]);
-
-
 
   useEffect(() => {
     api.get('/products', { params: { limit: 1000 } }).then(res => {
@@ -174,10 +180,15 @@ export const Invoices: React.FC = () => {
     };
   }, [fetchInvoices]);
 
-  const loadDetail = async (id: string) => {
+  const loadDetail = async (id: string, preferredCopy?: InvoiceCopyType) => {
     try {
       const res = await api.get(`/invoices/${id}`);
-      if (res.data.success) { setDetail(res.data.data); setDetailOpen(true); }
+      if (res.data.success) {
+        setDetail(res.data.data);
+        const isInventoryOfficer = user?.role?.name === 'INVENTORY_OFFICER';
+        setActiveCopy(preferredCopy || (isInventoryOfficer ? 'WAREHOUSE' : 'ORIGINAL'));
+        setDetailOpen(true);
+      }
     } catch { message.error('Failed to load invoice'); }
   };
 
@@ -430,7 +441,15 @@ export const Invoices: React.FC = () => {
       width: 100,
       render: (_: any, r: InvoiceRecord) => {
         const items: Array<{ key: string; label: React.ReactNode; icon?: React.ReactNode; danger?: boolean }> = [];
-        items.push({ key: 'view', icon: <EyeOutlined />, label: 'View Invoice' });
+        const isInventoryOfficer = user?.role?.name === 'INVENTORY_OFFICER';
+        if (isInventoryOfficer) {
+          items.push({ key: 'view-warehouse', icon: <EyeOutlined />, label: 'View Warehouse Copy' });
+          items.push({ key: 'view-orig', icon: <EyeOutlined />, label: 'View Original Copy' });
+        } else {
+          items.push({ key: 'view-orig', icon: <EyeOutlined />, label: 'View Original Copy' });
+          items.push({ key: 'view-warehouse', icon: <EyeOutlined />, label: 'View Warehouse Copy' });
+          items.push({ key: 'view-sr', icon: <EyeOutlined />, label: 'View SR Copy' });
+        }
         if (r.status === 'PENDING_APPROVAL') items.push({ key: 'approve', icon: <CheckCircleOutlined />, label: 'Approve' });
         if (r.status === 'APPROVED') items.push({ key: 'send', icon: <SendOutlined />, label: 'Send to Customer' });
         if (!['PAID', 'CANCELLED', 'DRAFT'].includes(r.status)) items.push({ key: 'pay', icon: <DollarOutlined />, label: 'Record Payment' });
@@ -438,6 +457,9 @@ export const Invoices: React.FC = () => {
 
         const onMenuClick = ({ key }: { key: string }) => {
           switch (key) {
+            case 'view-orig': loadDetail(r.id, 'ORIGINAL'); break;
+            case 'view-warehouse': loadDetail(r.id, 'WAREHOUSE'); break;
+            case 'view-sr': loadDetail(r.id, 'SALES_REP'); break;
             case 'view': loadDetail(r.id); break;
             case 'approve': updateStatus(r, 'APPROVED'); break;
             case 'send': updateStatus(r, 'SENT'); break;
@@ -528,7 +550,7 @@ export const Invoices: React.FC = () => {
       >
         <style>{`
           .invoice-table .ant-table-thead > tr > th {
-            background-color: #3f51b5 !important;
+            background-color: ${activeCopy === 'WAREHOUSE' ? '#0f766e' : activeCopy === 'SALES_REP' ? '#6d28d9' : '#1e3a8a'} !important;
             color: #fff !important;
             border-bottom: none !important;
             font-weight: 700 !important;
@@ -536,12 +558,141 @@ export const Invoices: React.FC = () => {
           .invoice-table .ant-table-tbody > tr > td {
             border-bottom: 1px solid #f0f0f0 !important;
           }
+          @media print {
+            body * {
+              visibility: hidden;
+            }
+            .ant-modal-root, .ant-modal-wrap, .ant-modal, .ant-modal-content, .ant-modal-body {
+              visibility: visible !important;
+              position: static !important;
+              padding: 0 !important;
+              margin: 0 !important;
+              background: transparent !important;
+              box-shadow: none !important;
+            }
+            .invoice-printable-sheet, .invoice-printable-sheet * {
+              visibility: visible !important;
+            }
+            .invoice-printable-sheet {
+              position: absolute !important;
+              left: 0 !important;
+              top: 0 !important;
+              width: 100% !important;
+              padding: 24px !important;
+              margin: 0 !important;
+              border: none !important;
+              box-shadow: none !important;
+              background: #fff !important;
+              z-index: 999999 !important;
+            }
+            .no-print {
+              display: none !important;
+            }
+          }
         `}</style>
 
         {detail && (
           <div style={{ padding: '8px 0' }}>
+            {/* Copy Switcher & Quick Actions Toolbar (Screen Only) */}
+            <div className="no-print" style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: 16,
+              padding: '12px 18px',
+              background: '#F8FAFC',
+              borderRadius: '12px',
+              border: '1px solid #E2E8F0',
+              flexWrap: 'wrap',
+              gap: 12
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <span style={{ fontWeight: 700, fontSize: '13px', color: '#475569' }}>Invoice Copy:</span>
+                <Segmented
+                  value={activeCopy}
+                  onChange={(val) => setActiveCopy(val as InvoiceCopyType)}
+                  options={[
+                    { label: '★ Original Copy', value: 'ORIGINAL' },
+                    { label: '📦 Warehouse Copy', value: 'WAREHOUSE' },
+                    { label: '💼 Sales Rep Copy', value: 'SALES_REP' },
+                  ]}
+                  style={{ fontWeight: 600 }}
+                />
+              </div>
+              <Space>
+                <Button
+                  icon={<PrinterOutlined />}
+                  onClick={handlePrint}
+                  style={{ borderRadius: '8px', fontWeight: 600, borderColor: '#64748B', color: '#334155' }}
+                >
+                  Print Copy
+                </Button>
+                <Button
+                  type="primary"
+                  icon={<DownloadOutlined />}
+                  onClick={() => handleDownloadPDF(activeCopy)}
+                  style={{
+                    borderRadius: '8px',
+                    fontWeight: 600,
+                    background: activeCopy === 'WAREHOUSE' ? '#0f766e' : activeCopy === 'SALES_REP' ? '#6d28d9' : '#1e3a8a',
+                    borderColor: activeCopy === 'WAREHOUSE' ? '#0f766e' : activeCopy === 'SALES_REP' ? '#6d28d9' : '#1e3a8a',
+                  }}
+                >
+                  Download {activeCopy === 'WAREHOUSE' ? 'Warehouse Copy' : activeCopy === 'SALES_REP' ? 'SR Copy' : 'Original PDF'}
+                </Button>
+              </Space>
+            </div>
+
             {/* Invoice Body */}
-            <div id={`invoice-print-${detail.id}`} style={{ position: 'relative', overflow: 'hidden', padding: '36px', background: '#ffffff', borderRadius: '12px', border: '1px solid #e8e8e8', fontFamily: 'Inter, system-ui, sans-serif' }}>
+            <div id={`invoice-print-${detail.id}`} className="invoice-printable-sheet" style={{ position: 'relative', overflow: 'hidden', padding: '36px', background: '#ffffff', borderRadius: '12px', border: '1px solid #e8e8e8', fontFamily: 'Inter, system-ui, sans-serif' }}>
+              {/* Top Dynamic Copy Banner */}
+              <div style={{
+                margin: '-36px -36px 24px -36px',
+                padding: '10px 24px',
+                background: activeCopy === 'WAREHOUSE'
+                  ? 'linear-gradient(90deg, #0f766e 0%, #0d9488 100%)'
+                  : activeCopy === 'SALES_REP'
+                    ? 'linear-gradient(90deg, #6d28d9 0%, #7c3aed 100%)'
+                    : 'linear-gradient(90deg, #1e3a8a 0%, #2563eb 100%)',
+                color: '#ffffff',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                borderRadius: '12px 12px 0 0',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span style={{ fontSize: '16px' }}>
+                    {activeCopy === 'WAREHOUSE' ? '📦' : activeCopy === 'SALES_REP' ? '💼' : '★'}
+                  </span>
+                  <div>
+                    <div style={{ fontWeight: 900, fontSize: '13px', letterSpacing: '0.8px', textTransform: 'uppercase' }}>
+                      {activeCopy === 'WAREHOUSE'
+                        ? 'WAREHOUSE & DISPATCH COPY'
+                        : activeCopy === 'SALES_REP'
+                          ? 'SALES REPRESENTATIVE (SR) COPY'
+                          : 'ORIGINAL COMMERCIAL INVOICE'}
+                    </div>
+                    <div style={{ fontSize: '11px', opacity: 0.9, fontWeight: 400 }}>
+                      {activeCopy === 'WAREHOUSE'
+                        ? 'STORE & INVENTORY RECORD · PHYSICAL GOODS DISPATCH & PACKING VERIFICATION'
+                        : activeCopy === 'SALES_REP'
+                          ? 'FIELD SALES & PAYMENT COLLECTION COPY · CUSTOMER RECEIPT ACKNOWLEDGEMENT'
+                          : 'OFFICIAL CUSTOMER & FINANCE COMMERCIAL COPY'}
+                    </div>
+                  </div>
+                </div>
+                <div style={{
+                  background: 'rgba(255, 255, 255, 0.2)',
+                  padding: '4px 12px',
+                  borderRadius: '20px',
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  letterSpacing: '0.5px'
+                }}>
+                  {activeCopy === 'WAREHOUSE' ? 'STORE & DISPATCH' : activeCopy === 'SALES_REP' ? 'FIELD SALES' : 'ORIGINAL'}
+                </div>
+              </div>
+
               {/* Diagonal Text Watermark */}
               <div style={{
                 position: 'absolute',
@@ -555,18 +706,18 @@ export const Invoices: React.FC = () => {
                 overflow: 'hidden'
               }}>
                 <div style={{
-                  transform: 'rotate(-45deg)',
+                  transform: 'rotate(-35deg)',
                   whiteSpace: 'nowrap',
-                  fontSize: '60px',
+                  fontSize: '56px',
                   fontWeight: 900,
-                  color: '#1d4ed8',
-                  opacity: 0.08,
-                  letterSpacing: '1px'
+                  color: activeCopy === 'WAREHOUSE' ? '#0f766e' : activeCopy === 'SALES_REP' ? '#6d28d9' : '#1d4ed8',
+                  opacity: 0.07,
+                  letterSpacing: '2px',
+                  textTransform: 'uppercase'
                 }}>
-                  Myanma Executive Network Co.,Ltd.
+                  {activeCopy === 'WAREHOUSE' ? 'WAREHOUSE / DISPATCH COPY' : activeCopy === 'SALES_REP' ? 'SALES REP (MSR) COPY' : 'ORIGINAL INVOICE'}
                 </div>
               </div>
-
 
               {/* Header: Company Info | Invoice Title & Status */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
@@ -587,8 +738,8 @@ export const Invoices: React.FC = () => {
               </div>
               <hr style={{ border: 'none', borderTop: '1px solid #e8e8e8', marginBottom: '24px' }} />
 
-              {/* Grid: Invoice Details | Bill To | Credit Status */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: '30px', marginBottom: '28px' }}>
+              {/* Grid: Invoice Details | Bill To */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: '30px', marginBottom: '20px' }}>
                 {/* Left Column: Invoice Details */}
                 <div style={{ flex: 1, minWidth: '220px' }}>
                   <table style={{ width: '100%', fontSize: '12px', borderCollapse: 'collapse' }}>
@@ -613,7 +764,15 @@ export const Invoices: React.FC = () => {
 
                 {/* Middle Column: Bill To */}
                 <div style={{ flex: 1.2, minWidth: '220px', fontSize: '12px' }}>
-                  <div style={{ fontWeight: 800, color: '#3f51b5', fontSize: '13px', letterSpacing: '0.5px', marginBottom: '8px' }}>BILL TO</div>
+                  <div style={{
+                    fontWeight: 800,
+                    color: activeCopy === 'WAREHOUSE' ? '#0f766e' : activeCopy === 'SALES_REP' ? '#6d28d9' : '#3f51b5',
+                    fontSize: '13px',
+                    letterSpacing: '0.5px',
+                    marginBottom: '8px'
+                  }}>
+                    BILL TO
+                  </div>
                   <div style={{ fontWeight: 700, color: '#111', fontSize: '14px', marginBottom: '4px' }}>{detail.customer?.name}</div>
                   {detail.customer?.phone && (
                     <div style={{ color: '#4B5563', marginBottom: '4px' }}>Phone: {detail.customer.phone}</div>
@@ -623,25 +782,84 @@ export const Invoices: React.FC = () => {
                     {detail.customer?.township && `, ${detail.customer.township}`}
                   </div>
                 </div>
+              </div>
 
-                {/* Right Column: Credit Status Box (Commented Out)
-                <div style={{ width: '220px', background: '#F4F5FA', borderRadius: '8px', padding: '14px', fontSize: '12px' }}>
-                  <div style={{ fontWeight: 800, color: '#3f51b5', letterSpacing: '0.5px', marginBottom: '10px' }}>CREDIT STATUS</div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                    <span style={{ color: '#666', fontWeight: 500 }}>Credit Limit</span>
-                    <span style={{ fontWeight: 700, color: '#111' }}>
-                      {detail.customer?.creditLimit ? `${Number(detail.customer.creditLimit.creditLimit).toLocaleString()} K` : '0 K'}
-                    </span>
+              {/* Department Specific Information Bar */}
+              {activeCopy === 'WAREHOUSE' && (
+                <div style={{
+                  background: '#f0fdfa',
+                  border: '1px solid #99f6e4',
+                  borderRadius: '8px',
+                  padding: '12px 16px',
+                  marginBottom: '20px',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  gap: '16px',
+                  flexWrap: 'wrap'
+                }}>
+                  <div>
+                    <span style={{ fontSize: '11px', color: '#0f766e', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Dispatch Warehouse</span>
+                    <div style={{ fontWeight: 700, fontSize: '13px', color: '#134e4a' }}>{detail.order?.branch?.name || 'Central Store'}</div>
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: '#666', fontWeight: 500 }}>Outstanding</span>
-                    <span style={{ fontWeight: 700, color: '#EF4444' }}>
-                      {detail.customer?.creditLimit ? `${Number(detail.customer.creditLimit.outstandingBalance).toLocaleString()} K` : '0 K'}
-                    </span>
+                  <div>
+                    <span style={{ fontSize: '11px', color: '#0f766e', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Delivery Address</span>
+                    <div style={{ fontWeight: 600, fontSize: '12px', color: '#134e4a' }}>{detail.customer?.address}{detail.customer?.township ? `, ${detail.customer.township}` : ''}</div>
+                  </div>
+                  <div>
+                    <span style={{ fontSize: '11px', color: '#0f766e', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Customer Contact</span>
+                    <div style={{ fontWeight: 600, fontSize: '12px', color: '#134e4a' }}>{detail.customer?.name} ({detail.customer?.phone || 'No Phone'})</div>
+                  </div>
+                  <div>
+                    <span style={{ fontSize: '11px', color: '#0f766e', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Order Reference</span>
+                    <div style={{ fontWeight: 700, fontSize: '13px', color: '#134e4a' }}>{detail.order?.orderNumber || '—'}</div>
+                  </div>
+                  <div>
+                    <span style={{ fontSize: '11px', color: '#0f766e', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Store Status</span>
+                    <div><Tag color="cyan" style={{ fontWeight: 700, margin: 0 }}>READY FOR PACKING & DISPATCH</Tag></div>
                   </div>
                 </div>
-                */}
-              </div>
+              )}
+
+              {activeCopy === 'SALES_REP' && (
+                <div style={{
+                  background: '#f5f3ff',
+                  border: '1px solid #ddd6fe',
+                  borderRadius: '8px',
+                  padding: '12px 16px',
+                  marginBottom: '20px',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  gap: '16px',
+                  flexWrap: 'wrap'
+                }}>
+                  <div>
+                    <span style={{ fontSize: '11px', color: '#6d28d9', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Medical Sales Rep (MSR)</span>
+                    <div style={{ fontWeight: 700, fontSize: '13px', color: '#4c1d95' }}>
+                      {detail.order?.salesRep?.user ? `${detail.order.salesRep.user.firstName} ${detail.order.salesRep.user.lastName}` : (detail.order?.salesRep?.code || 'Assigned MSR')}
+                    </div>
+                  </div>
+                  <div>
+                    <span style={{ fontSize: '11px', color: '#6d28d9', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px' }}>MSR Code</span>
+                    <div style={{ fontWeight: 600, fontSize: '12px', color: '#4c1d95' }}>{detail.order?.salesRep?.code || '—'}</div>
+                  </div>
+                  <div>
+                    <span style={{ fontSize: '11px', color: '#6d28d9', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Payment Terms</span>
+                    <div style={{ fontWeight: 700, fontSize: '12px', color: '#4c1d95' }}>
+                      {detail.order?.paymentNotes?.includes('Cash Down') || detail.order?.paymentMethod === 'CASH_DOWN' ? 'Cash Down (COD)' : (detail.order?.paymentMethod ? detail.order.paymentMethod.replace(/_/g, ' ') : 'Credit Terms')}
+                    </div>
+                  </div>
+                  <div>
+                    <span style={{ fontSize: '11px', color: '#6d28d9', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Collection Due Date</span>
+                    <div style={{ fontWeight: 700, fontSize: '12px', color: '#dc2626' }}>{dayjs(detail.dueDate).format('DD MMMM YYYY')}</div>
+                  </div>
+                  <div>
+                    <span style={{ fontSize: '11px', color: '#6d28d9', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Balance To Collect</span>
+                    <div style={{ fontWeight: 800, fontSize: '14px', color: '#dc2626' }}>
+                      {Math.round(Number(detail.balanceDue)).toLocaleString()} {CURRENCY.symbol}
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Product Table */}
               <Table
@@ -652,6 +870,15 @@ export const Invoices: React.FC = () => {
                 bordered={false}
                 style={{ marginBottom: '28px' }}
                 columns={[
+                  ...(activeCopy === 'WAREHOUSE' ? [{
+                    title: 'CHECK',
+                    key: 'check',
+                    width: 65,
+                    align: 'center' as const,
+                    render: () => (
+                      <div style={{ width: '18px', height: '18px', border: '2px solid #0f766e', borderRadius: '3px', margin: '0 auto', background: '#fff' }} />
+                    )
+                  }] : []),
                   {
                     title: 'No.',
                     width: 50,
@@ -683,7 +910,7 @@ export const Invoices: React.FC = () => {
                   {
                     title: 'BATCH',
                     key: 'batch',
-                    width: 200,
+                    width: 180,
                     render: (_: any, r: any) => {
                       const desc = r.productName || r.description || '';
                       const batchRegex = /\(Batch:\s*([^)]+)\)/i;
@@ -692,12 +919,16 @@ export const Invoices: React.FC = () => {
                     }
                   },
                   {
-                    title: 'QTY',
+                    title: activeCopy === 'WAREHOUSE' ? 'QTY (PACK)' : 'QTY',
                     dataIndex: 'quantity',
                     key: 'quantity',
-                    width: 70,
+                    width: activeCopy === 'WAREHOUSE' ? 95 : 70,
                     align: 'center' as const,
-                    render: (v: number) => <span style={{ fontSize: '13px', fontWeight: 700, color: '#000' }}>{v}</span>,
+                    render: (v: number) => (
+                      <span style={{ fontSize: '13px', fontWeight: 800, color: activeCopy === 'WAREHOUSE' ? '#0f766e' : '#000' }}>
+                        {v} {activeCopy === 'WAREHOUSE' ? <span style={{ fontSize: '10px', fontWeight: 600 }}>PACK</span> : ''}
+                      </span>
+                    ),
                   },
                   {
                     title: 'UNIT PRICE',
@@ -780,7 +1011,9 @@ export const Invoices: React.FC = () => {
                     </table>
                     <p style={{ margin: '8px 0 0 0', fontSize: '11px', color: '#666', fontStyle: 'italic' }}>Please send payment slip to our billing department.</p>
                   </div>
-                       {/* Right Side: Totals */}
+                </div>
+
+                {/* Right Side: Totals */}
                 <div style={{ width: '280px', fontSize: '13px' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                     <tbody>
@@ -841,7 +1074,71 @@ export const Invoices: React.FC = () => {
                       </tr>
                     </tbody>
                   </table>
-                </div>            </div>
+                </div>
+              </div>
+
+              {/* Dynamic Signatures Block based on Copy Type */}
+              <div style={{ marginTop: '28px', paddingTop: '16px', borderTop: '1px dashed #cbd5e1' }}>
+                {activeCopy === 'WAREHOUSE' ? (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '14px' }}>
+                    <div style={{ textAlign: 'center', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px 6px', background: '#f8fafc' }}>
+                      <div style={{ height: '42px', borderBottom: '1px dashed #94a3b8', marginBottom: '8px' }}></div>
+                      <div style={{ fontWeight: 700, fontSize: '11px', color: '#0f766e' }}>1. PREPARED / PICKED BY</div>
+                      <div style={{ fontSize: '10px', color: '#64748b', marginTop: '2px' }}>Warehouse Storekeeper</div>
+                      <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '4px' }}>Date: __________________</div>
+                    </div>
+                    <div style={{ textAlign: 'center', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px 6px', background: '#f8fafc' }}>
+                      <div style={{ height: '42px', borderBottom: '1px dashed #94a3b8', marginBottom: '8px' }}></div>
+                      <div style={{ fontWeight: 700, fontSize: '11px', color: '#0f766e' }}>2. CHECKED & PACKED BY</div>
+                      <div style={{ fontSize: '10px', color: '#64748b', marginTop: '2px' }}>Quality & Dispatch QC</div>
+                      <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '4px' }}>Date: __________________</div>
+                    </div>
+                    <div style={{ textAlign: 'center', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px 6px', background: '#f8fafc' }}>
+                      <div style={{ height: '42px', borderBottom: '1px dashed #94a3b8', marginBottom: '8px' }}></div>
+                      <div style={{ fontWeight: 700, fontSize: '11px', color: '#0f766e' }}>3. DISPATCHED / DRIVER</div>
+                      <div style={{ fontSize: '10px', color: '#64748b', marginTop: '2px' }}>Delivery Agent / Vehicle No.</div>
+                      <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '4px' }}>Date: __________________</div>
+                    </div>
+                    <div style={{ textAlign: 'center', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px 6px', background: '#f8fafc' }}>
+                      <div style={{ height: '42px', borderBottom: '1px dashed #94a3b8', marginBottom: '8px' }}></div>
+                      <div style={{ fontWeight: 700, fontSize: '11px', color: '#0f766e' }}>4. GOODS RECEIVED BY</div>
+                      <div style={{ fontSize: '10px', color: '#64748b', marginTop: '2px' }}>Customer Sign & Stamp</div>
+                      <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '4px' }}>Date: __________________</div>
+                    </div>
+                  </div>
+                ) : activeCopy === 'SALES_REP' ? (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '40px' }}>
+                    <div style={{ textAlign: 'center', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '16px', background: '#faf5ff' }}>
+                      <div style={{ height: '48px', borderBottom: '1px dashed #a855f7', marginBottom: '8px' }}></div>
+                      <div style={{ fontWeight: 700, fontSize: '12px', color: '#6d28d9' }}>SALES REPRESENTATIVE (MSR)</div>
+                      <div style={{ fontSize: '11px', color: '#7e22ce', marginTop: '2px' }}>
+                        {detail.order?.salesRep?.user ? `${detail.order.salesRep.user.firstName} ${detail.order.salesRep.user.lastName}` : (detail.order?.salesRep?.code || 'Representative Signature')}
+                      </div>
+                      <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '4px' }}>Collection Date: __________________</div>
+                    </div>
+                    <div style={{ textAlign: 'center', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '16px', background: '#faf5ff' }}>
+                      <div style={{ height: '48px', borderBottom: '1px dashed #a855f7', marginBottom: '8px' }}></div>
+                      <div style={{ fontWeight: 700, fontSize: '12px', color: '#6d28d9' }}>CUSTOMER ACKNOWLEDGEMENT & PAYMENT</div>
+                      <div style={{ fontSize: '11px', color: '#7e22ce', marginTop: '2px' }}>Authorized Receiver Signature & Stamp</div>
+                      <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '4px' }}>Date: __________________</div>
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '50px' }}>
+                    <div style={{ textAlign: 'center', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '16px', background: '#f8fafc' }}>
+                      <div style={{ height: '48px', borderBottom: '1px dashed #94a3b8', marginBottom: '8px' }}></div>
+                      <div style={{ fontWeight: 700, fontSize: '12px', color: '#1e3a8a' }}>AUTHORIZED SIGNATURE</div>
+                      <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>For Myanma Executive Network Co.,Ltd.</div>
+                      <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '4px' }}>Finance / Billing Department</div>
+                    </div>
+                    <div style={{ textAlign: 'center', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '16px', background: '#f8fafc' }}>
+                      <div style={{ height: '48px', borderBottom: '1px dashed #94a3b8', marginBottom: '8px' }}></div>
+                      <div style={{ fontWeight: 700, fontSize: '12px', color: '#1e3a8a' }}>CUSTOMER ACCEPTANCE</div>
+                      <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>Received in Good Condition (Sign & Stamp)</div>
+                      <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '4px' }}>Date: __________________</div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Footer */}
@@ -864,7 +1161,7 @@ export const Invoices: React.FC = () => {
             </div>
 
             {/* Actions Panel Bottom */}
-            <div style={{ marginTop: 20, display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+            <div className="no-print" style={{ marginTop: 20, display: 'flex', justifyContent: 'flex-end', gap: 10, flexWrap: 'wrap' }}>
               {canEditInvoice && (
                 <Button
                   type="default"
@@ -909,11 +1206,25 @@ export const Invoices: React.FC = () => {
               )}
               <Button
                 type="default"
-                icon={<DownloadOutlined />}
-                onClick={handleDownloadPDF}
+                icon={<PrinterOutlined />}
+                onClick={handlePrint}
                 style={{ borderRadius: '10px', height: '40px', fontWeight: 600 }}
               >
-                Download PDF
+                Print ({activeCopy === 'ORIGINAL' ? 'Original' : activeCopy === 'WAREHOUSE' ? 'Warehouse' : 'SR Copy'})
+              </Button>
+              <Button
+                type="primary"
+                icon={<DownloadOutlined />}
+                onClick={() => handleDownloadPDF(activeCopy)}
+                style={{
+                  borderRadius: '10px',
+                  height: '40px',
+                  fontWeight: 600,
+                  background: activeCopy === 'WAREHOUSE' ? '#0f766e' : activeCopy === 'SALES_REP' ? '#6d28d9' : '#1e3a8a',
+                  borderColor: activeCopy === 'WAREHOUSE' ? '#0f766e' : activeCopy === 'SALES_REP' ? '#6d28d9' : '#1e3a8a',
+                }}
+              >
+                Download PDF ({activeCopy === 'ORIGINAL' ? 'Original' : activeCopy === 'WAREHOUSE' ? 'Warehouse' : 'SR'})
               </Button>
               {!['PAID', 'CANCELLED'].includes(detail.status) && (
                 <Popconfirm

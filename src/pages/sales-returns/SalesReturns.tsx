@@ -5,7 +5,7 @@ import {
 } from 'antd';
 import {
   SearchOutlined, ReloadOutlined, EyeOutlined, CloseCircleOutlined,
-  CheckCircleOutlined
+  CheckCircleOutlined, DollarOutlined
 } from '@ant-design/icons';
 import { api } from '../../services/api';
 import { CURRENCY } from '../../types/index';
@@ -37,6 +37,15 @@ interface ReturnItem {
   product: { name: string; sku: string };
 }
 
+interface ExchangeItem {
+  id: string;
+  quantity: number;
+  unitPrice: number;
+  totalPrice: number;
+  batchNumber: string | null;
+  product: { name: string; sku: string };
+}
+
 interface ReturnRecord {
   id: string;
   returnNumber: string;
@@ -46,13 +55,19 @@ interface ReturnRecord {
   totalAmount: number;
   subtotal: number;
   tax: number;
+  settlementType: 'REFUND_CASH' | 'EXCHANGE_PRODUCT';
+  refundStatus: 'PENDING' | 'COMPLETED' | 'N_A';
+  refundMethod: string | null;
+  refundNotes: string | null;
   customer: { name: string; code: string };
   branch: { name: string; code: string };
   creator: { firstName: string; lastName: string };
   approver: { firstName: string; lastName: string } | null;
   items: ReturnItem[];
+  exchangeItems?: ExchangeItem[];
   order: { orderNumber: string } | null;
   invoice: { invoiceNumber: string } | null;
+  replacementOrder: { id: string; orderNumber: string; status: string; totalAmount: number } | null;
 }
 
 export const SalesReturns: React.FC = () => {
@@ -68,6 +83,12 @@ export const SalesReturns: React.FC = () => {
   const [actionLoading, setActionLoading] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
   const [rejectModalOpen, setRejectModalOpen] = useState(false);
+
+  // Disburse Refund State
+  const [refundModalOpen, setRefundModalOpen] = useState(false);
+  const [refundMethod, setRefundMethod] = useState('CASH');
+  const [refundNotes, setRefundNotes] = useState('');
+  const [disburseLoading, setDisburseLoading] = useState(false);
 
   const { user } = useAuthStore();
 
@@ -127,14 +148,37 @@ export const SalesReturns: React.FC = () => {
     }
   };
 
+  const handleDisburseRefund = async () => {
+    if (!detailReturn) return;
+    try {
+      setDisburseLoading(true);
+      const res = await api.post(`/sales-returns/${detailReturn.id}/disburse-refund`, {
+        refundMethod,
+        refundNotes: refundNotes || undefined,
+      });
+      if (res.data.success) {
+        message.success('Cash refund successfully recorded as disbursed');
+        setRefundModalOpen(false);
+        setRefundNotes('');
+        handleViewDetail(detailReturn.id);
+        fetchReturns();
+      }
+    } catch (err: any) {
+      message.error(err.response?.data?.message || 'Failed to disburse refund');
+    } finally {
+      setDisburseLoading(false);
+    }
+  };
+
   const isManager = user && ['SUPER_ADMIN', 'HQ_MANAGER', 'BRANCH_MANAGER'].includes(user.role.name);
+  const isFinanceOrManager = user && ['SUPER_ADMIN', 'HQ_MANAGER', 'BRANCH_MANAGER', 'FINANCE_OFFICER'].includes(user.role.name);
 
   const columns = [
     {
       title: 'Return #',
       dataIndex: 'returnNumber',
       key: 'returnNumber',
-      width: 140,
+      width: 130,
       render: (num: string) => <Text code style={{ fontWeight: 700, color: 'var(--primary-color)' }}>{num}</Text>,
     },
     {
@@ -148,10 +192,38 @@ export const SalesReturns: React.FC = () => {
       ),
     },
     {
+      title: 'Settlement',
+      key: 'settlementType',
+      width: 170,
+      render: (_: any, record: ReturnRecord) => (
+        <div>
+          {record.settlementType === 'EXCHANGE_PRODUCT' ? (
+            <Space direction="vertical" size={2}>
+              <Tag color="cyan" style={{ fontWeight: 600 }}>🔄 Product Exchange</Tag>
+              {record.replacementOrder && (
+                <Tag color="blue" style={{ fontSize: '11px' }}>
+                  Ord: {record.replacementOrder.orderNumber}
+                </Tag>
+              )}
+            </Space>
+          ) : (
+            <Space direction="vertical" size={2}>
+              <Tag color="gold" style={{ fontWeight: 600 }}>💵 Cash Refund</Tag>
+              {record.refundStatus === 'COMPLETED' ? (
+                <Tag color="green" style={{ fontSize: '11px' }}>Completed</Tag>
+              ) : (
+                <Tag color="orange" style={{ fontSize: '11px' }}>Pending Payout</Tag>
+              )}
+            </Space>
+          )}
+        </div>
+      ),
+    },
+    {
       title: 'Branch',
       dataIndex: ['branch', 'name'],
       key: 'branch',
-      width: 150,
+      width: 140,
     },
     {
       title: 'Reference',
@@ -168,11 +240,11 @@ export const SalesReturns: React.FC = () => {
       title: 'Date',
       dataIndex: 'returnDate',
       key: 'returnDate',
-      width: 130,
+      width: 120,
       render: (date: string) => dayjs(date).format('DD MMM YYYY'),
     },
     {
-      title: 'Refund Amount',
+      title: 'Total Value',
       dataIndex: 'totalAmount',
       key: 'totalAmount',
       align: 'right' as const,
@@ -187,7 +259,7 @@ export const SalesReturns: React.FC = () => {
       title: 'Status',
       dataIndex: 'status',
       key: 'status',
-      width: 120,
+      width: 110,
       render: (status: string) => (
         <Tag color={STATUS_COLOR[status]} style={{ fontWeight: 600 }}>
           {status}
@@ -216,40 +288,36 @@ export const SalesReturns: React.FC = () => {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <Title level={3} style={{ margin: 0, fontWeight: 700 }}>Sales Returns</Title>
-          <Text type="secondary">Process medicine return requests and manage credit note generation</Text>
+          <Text type="secondary">Review and approve customer returns, cash refunds, and product exchanges</Text>
         </div>
-        <Button
-          type="primary"
-          icon={<ReloadOutlined />}
-          onClick={fetchReturns}
-        />
+        <Button icon={<ReloadOutlined />} onClick={() => fetchReturns()}>
+          Refresh
+        </Button>
       </div>
 
-      <Card className="glass-panel" style={{ border: '1px solid var(--glass-border)' }}>
-        <Space style={{ marginBottom: 16 }} size="middle" wrap>
+      <Card>
+        <div style={{ display: 'flex', gap: '16px', marginBottom: '20px' }}>
           <Input
-            placeholder="Search return # or customer..."
-            prefix={<SearchOutlined />}
+            prefix={<SearchOutlined style={{ color: '#bbb' }} />}
+            placeholder="Search by Return Number or Customer..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            style={{ width: 250 }}
-            onPressEnter={fetchReturns}
+            style={{ width: '320px' }}
+            allowClear
           />
           <Select
-            placeholder="Filter Status"
-            allowClear
+            placeholder="Filter by Status"
             value={statusFilter || undefined}
             onChange={(val) => setStatusFilter(val || '')}
-            style={{ width: 150 }}
+            style={{ width: '220px' }}
+            allowClear
           >
-            <Select.Option value="REQUESTED">Requested</Select.Option>
+            <Select.Option value="REQUESTED">Requested (Pending Approval)</Select.Option>
             <Select.Option value="APPROVED">Approved</Select.Option>
             <Select.Option value="REJECTED">Rejected</Select.Option>
             <Select.Option value="CANCELLED">Cancelled</Select.Option>
           </Select>
-          <Button type="primary" onClick={fetchReturns}>Apply Filters</Button>
-          <Button onClick={() => { setSearch(''); setStatusFilter(''); setPage(1); }}>Reset</Button>
-        </Space>
+        </div>
 
         <Table
           dataSource={returns}
@@ -275,7 +343,7 @@ export const SalesReturns: React.FC = () => {
         }
         open={detailOpen}
         onCancel={() => setDetailOpen(false)}
-        width={750}
+        width={850}
         footer={
           detailReturn?.status === 'REQUESTED' && isManager ? [
             <Button
@@ -290,7 +358,11 @@ export const SalesReturns: React.FC = () => {
             <Popconfirm
               key="approve"
               title="Approve Sales Return?"
-              description="This will add items back to inventory stock, decrement customer outstanding balance, and generate a Credit Note invoice."
+              description={
+                detailReturn.settlementType === 'EXCHANGE_PRODUCT'
+                  ? "This will restock returned inventory, deduct replacement items from warehouse stock, and create a paid Replacement Order (0 MMK balance) ready for delivery."
+                  : "This will restock returned inventory, auto-offset unpaid invoice balance if applicable, generate a Credit Note invoice, and record pending cash refund."
+              }
               onConfirm={() => handleStatusTransition(detailReturn.id, 'APPROVED')}
               okText="Yes, Approve"
               cancelText="Cancel"
@@ -304,6 +376,17 @@ export const SalesReturns: React.FC = () => {
                 Approve Return
               </Button>
             </Popconfirm>
+          ] : detailReturn?.status === 'APPROVED' && detailReturn?.settlementType === 'REFUND_CASH' && detailReturn?.refundStatus === 'PENDING' && isFinanceOrManager ? [
+            <Button
+              key="disburse"
+              type="primary"
+              style={{ backgroundColor: '#f59e0b', borderColor: '#f59e0b' }}
+              icon={<DollarOutlined />}
+              onClick={() => setRefundModalOpen(true)}
+            >
+              Disburse Cash Refund
+            </Button>,
+            <Button key="close" onClick={() => setDetailOpen(false)}>Close</Button>
           ] : [
             <Button key="close" onClick={() => setDetailOpen(false)}>Close</Button>
           ]
@@ -319,6 +402,26 @@ export const SalesReturns: React.FC = () => {
                 <Tag color={STATUS_COLOR[detailReturn.status]} style={{ fontWeight: 600 }}>
                   {detailReturn.status}
                 </Tag>
+              </Descriptions.Item>
+              <Descriptions.Item label="Settlement Way">
+                {detailReturn.settlementType === 'EXCHANGE_PRODUCT' ? (
+                  <Tag color="cyan" style={{ fontWeight: 600 }}>🔄 Product Exchange</Tag>
+                ) : (
+                  <Tag color="gold" style={{ fontWeight: 600 }}>💵 Cash Refund / Credit Note</Tag>
+                )}
+              </Descriptions.Item>
+              <Descriptions.Item label="Settlement Status">
+                {detailReturn.settlementType === 'EXCHANGE_PRODUCT' ? (
+                  detailReturn.replacementOrder ? (
+                    <Tag color="blue">Order: {detailReturn.replacementOrder.orderNumber}</Tag>
+                  ) : <Tag color="default">Pending Replacement Dispatch</Tag>
+                ) : (
+                  detailReturn.refundStatus === 'COMPLETED' ? (
+                    <Tag color="green">Refund Completed ({detailReturn.refundMethod || 'Disbursed'})</Tag>
+                  ) : (
+                    <Tag color="orange">Pending Cash Refund Payout</Tag>
+                  )
+                )}
               </Descriptions.Item>
               <Descriptions.Item label="Customer">
                 <div>{detailReturn.customer.name} ({detailReturn.customer.code})</div>
@@ -341,6 +444,11 @@ export const SalesReturns: React.FC = () => {
               <Descriptions.Item label="Return Reason" span={2}>
                 {detailReturn.reason || <Text type="secondary">No reason provided</Text>}
               </Descriptions.Item>
+              {detailReturn.refundNotes && (
+                <Descriptions.Item label="Settlement Notes" span={2}>
+                  <Text type="secondary">{detailReturn.refundNotes}</Text>
+                </Descriptions.Item>
+              )}
             </Descriptions>
 
             <div>
@@ -401,6 +509,55 @@ export const SalesReturns: React.FC = () => {
               />
             </div>
 
+            {/* Exchange Replacement Items Table */}
+            {detailReturn.settlementType === 'EXCHANGE_PRODUCT' && detailReturn.exchangeItems && detailReturn.exchangeItems.length > 0 && (
+              <div>
+                <Title level={5} style={{ marginBottom: '12px', fontWeight: 600, color: '#0284c7' }}>
+                  🔄 Replacement Products (Customer Receives)
+                </Title>
+                <Table
+                  dataSource={detailReturn.exchangeItems}
+                  rowKey="id"
+                  pagination={false}
+                  size="small"
+                  columns={[
+                    {
+                      title: 'Replacement Product',
+                      key: 'product',
+                      render: (_: any, item: ExchangeItem) => (
+                        <div>
+                          <div style={{ fontWeight: 600 }}>{item.product.name}</div>
+                          <Text type="secondary" style={{ fontSize: '11px' }}>SKU: {item.product.sku}</Text>
+                        </div>
+                      ),
+                    },
+                    {
+                      title: 'Batch',
+                      dataIndex: 'batchNumber',
+                      render: (bn) => bn ? <Text code>{bn}</Text> : 'Auto-allocated',
+                    },
+                    {
+                      title: 'Quantity',
+                      dataIndex: 'quantity',
+                      align: 'right',
+                    },
+                    {
+                      title: 'Unit Price',
+                      dataIndex: 'unitPrice',
+                      align: 'right',
+                      render: (p) => `${Number(p).toLocaleString()} ${CURRENCY.symbol}`,
+                    },
+                    {
+                      title: 'Total Price',
+                      dataIndex: 'totalPrice',
+                      align: 'right',
+                      render: (p) => `${Number(p).toLocaleString()} ${CURRENCY.symbol}`,
+                    },
+                  ]}
+                />
+              </div>
+            )}
+
             <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
               <div style={{ width: '250px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -412,7 +569,7 @@ export const SalesReturns: React.FC = () => {
                   <Text>{Number(detailReturn.tax).toLocaleString()} {CURRENCY.symbol}</Text>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #f0f0f0', paddingTop: '8px' }}>
-                  <Text style={{ fontWeight: 700 }}>Total Refund:</Text>
+                  <Text style={{ fontWeight: 700 }}>Total Value:</Text>
                   <Text style={{ fontWeight: 700, color: 'var(--primary-color)' }}>
                     {Number(detailReturn.totalAmount).toLocaleString()} {CURRENCY.symbol}
                   </Text>
@@ -451,6 +608,58 @@ export const SalesReturns: React.FC = () => {
             value={rejectReason}
             onChange={(e) => setRejectReason(e.target.value)}
           />
+        </Space>
+      </Modal>
+
+      {/* Disburse Cash Refund Modal */}
+      <Modal
+        title={
+          <div style={{ fontSize: '18px', fontWeight: 700 }}>
+            Disburse Cash Refund - <Text code>{detailReturn?.returnNumber}</Text>
+          </div>
+        }
+        open={refundModalOpen}
+        onOk={handleDisburseRefund}
+        onCancel={() => setRefundModalOpen(false)}
+        confirmLoading={disburseLoading}
+        okText="Confirm Disbursal"
+        okButtonProps={{ style: { backgroundColor: '#f59e0b', borderColor: '#f59e0b' } }}
+      >
+        <Space direction="vertical" style={{ width: '100%', marginTop: '12px' }} size="middle">
+          <div style={{ background: '#fef3c7', padding: '12px', borderRadius: '8px', border: '1px solid #fde68a' }}>
+            <Text type="secondary">Refund Amount to Customer:</Text>
+            <div style={{ fontSize: '20px', fontWeight: 700, color: '#b45309' }}>
+              {Number(detailReturn?.totalAmount || 0).toLocaleString()} {CURRENCY.symbol}
+            </div>
+            <Text style={{ fontSize: '12px', color: '#78350f' }}>
+              Customer: {detailReturn?.customer.name}
+            </Text>
+          </div>
+
+          <div>
+            <Text strong style={{ display: 'block', marginBottom: 6 }}>Disbursal Method</Text>
+            <Select
+              value={refundMethod}
+              onChange={setRefundMethod}
+              style={{ width: '100%' }}
+              options={[
+                { value: 'CASH', label: 'Cash (Drawer Payout)' },
+                { value: 'BANK_TRANSFER', label: 'Bank Transfer' },
+                { value: 'MOBILE_BANKING', label: 'Mobile Banking (KBZPay / WavePay)' },
+                { value: 'CHEQUE', label: 'Cheque' },
+              ]}
+            />
+          </div>
+
+          <div>
+            <Text strong style={{ display: 'block', marginBottom: 6 }}>Disbursal Reference / Voucher Notes</Text>
+            <Input.TextArea
+              rows={3}
+              placeholder="e.g. Cash voucher #1209 or Bank transaction ref..."
+              value={refundNotes}
+              onChange={(e) => setRefundNotes(e.target.value)}
+            />
+          </div>
         </Space>
       </Modal>
     </div>

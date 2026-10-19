@@ -696,8 +696,10 @@ export const Reports: React.FC = () => {
       'B.Unit', 'Supplier Name', 'Product Code', 'Product Name',
       'Customer ID', 'Company Name', 'Region', 'District',
       'City', 'Township', 'Main Channel', 'Sub-channel', 'Invoice ID',
-      'Inv Date', 'Year', 'Quarter', 'Month', 'Unit Price',
-      'UOM', 'Sales Qty', 'FOC Qty', 'Sample Qty', 'Total Qty',
+      'Inv Date', 'Year', 'Quarter', 'Month',
+      'UOM', 'Sales Qty', 'Unit Price',
+      'Total Amount', 'Discount %', 'Discount Amount', 'Net Unit Price', 'Net Sale',
+      'FOC Qty', 'Sample Qty', 'Total Qty',
       'Sales Rep', 'Sales Team', 'Remark'
     ];
 
@@ -713,8 +715,14 @@ export const Reports: React.FC = () => {
         r.businessUnit, r.supplierName, r.productCode, r.productName,
         r.customerId, r.companyName, r.region, r.district,
         r.city, r.township, r.mainChannel, r.subChannel, r.invoiceId,
-        r.invoiceDate, r.year, r.quarter, r.month, r.unitPrice,
-        r.sellingUom, r.salesQuantity, r.focQuantity, r.sampleQuantity,
+        r.invoiceDate, r.year, r.quarter, r.month,
+        r.sellingUom, r.salesQuantity, r.unitPrice,
+        r.totalAmount ?? r.grossSales ?? 0,
+        r.discountPct ?? r.discountPercentage ?? 0,
+        r.discountAmount ?? r.unitDiscountAmount ?? 0,
+        r.netUnitPrice ?? r.unitPrice ?? 0,
+        r.netSale ?? r.netSales ?? 0,
+        r.focQuantity, r.sampleQuantity,
         r.totalQuantity, r.salesRepName, r.salesTeam, r.remark
       ]);
     });
@@ -1450,12 +1458,71 @@ export const Reports: React.FC = () => {
                       { title: 'Year', dataIndex: 'year', key: 'year' },
                       { title: 'Quarter', dataIndex: 'quarter', key: 'quarter' },
                       { title: 'Month', dataIndex: 'month', key: 'month' },
-                      { title: 'Unit Price', dataIndex: 'unitPrice', key: 'unitPrice', render: (v) => Number(v).toLocaleString() },
                       { title: 'UOM', dataIndex: 'sellingUom', key: 'sellingUom' },
-                      { title: 'Sales Qty', dataIndex: 'salesQuantity', key: 'salesQuantity', render: (v) => <Text strong>{v}</Text> },
-                      { title: 'FOC Qty', dataIndex: 'focQuantity', key: 'focQuantity' },
-                      { title: 'Sample Qty', dataIndex: 'sampleQuantity', key: 'sampleQuantity' },
-                      { title: 'Total Qty', dataIndex: 'totalQuantity', key: 'totalQuantity', render: (v) => <Text strong type="success">{v}</Text> },
+                      { title: 'Sales Qty', dataIndex: 'salesQuantity', key: 'salesQuantity', align: 'right', render: (v) => <Text strong>{v}</Text> },
+                      { title: 'Unit Price', dataIndex: 'unitPrice', key: 'unitPrice', align: 'right', render: (v) => Number(v || 0) > 0 ? Number(v).toLocaleString() : '-' },
+                      { 
+                        title: 'Total Amount', 
+                        dataIndex: 'totalAmount', 
+                        key: 'totalAmount', 
+                        align: 'right', 
+                        render: (v, r: any) => {
+                          const amt = Number(v ?? r.grossSales ?? 0);
+                          return amt > 0 ? <Text strong>{amt.toLocaleString()}</Text> : '-';
+                        }
+                      },
+                      { 
+                        title: 'Discount %', 
+                        dataIndex: 'discountPct', 
+                        key: 'discountPct', 
+                        align: 'right', 
+                        render: (v, r: any) => {
+                          const pct = Number(v ?? r.discountPercentage ?? 0);
+                          return pct > 0 ? (
+                            <Tag color="cyan" style={{ fontWeight: 600, marginRight: 0 }}>{pct.toFixed(2)}%</Tag>
+                          ) : <Text type="secondary">-</Text>;
+                        }
+                      },
+                      { 
+                        title: 'Discount Amount', 
+                        dataIndex: 'discountAmount', 
+                        key: 'discountAmount', 
+                        align: 'right', 
+                        render: (v, r: any) => {
+                          const amt = Number(v ?? r.unitDiscountAmount ?? 0);
+                          const lineDisc = Number(r.totalDiscountAmount ?? 0);
+                          return amt > 0 ? (
+                            <AntTooltip title={`Total Line Discount: ${lineDisc.toLocaleString()} MMK`}>
+                              <Text type="danger" style={{ fontWeight: 600 }}>{amt.toLocaleString()}</Text>
+                            </AntTooltip>
+                          ) : <Text type="secondary">-</Text>;
+                        }
+                      },
+                      { 
+                        title: 'Net Unit Price', 
+                        dataIndex: 'netUnitPrice', 
+                        key: 'netUnitPrice', 
+                        align: 'right', 
+                        render: (v) => {
+                          const net = Number(v || 0);
+                          return net > 0 ? net.toLocaleString() : '-';
+                        }
+                      },
+                      { 
+                        title: 'Net Sale', 
+                        dataIndex: 'netSale', 
+                        key: 'netSale', 
+                        align: 'right', 
+                        render: (v, r: any) => {
+                          const net = Number(v ?? r.netSales ?? 0);
+                          return net > 0 ? (
+                            <Text strong style={{ color: '#10B981', fontWeight: 700 }}>{net.toLocaleString()}</Text>
+                          ) : '-';
+                        }
+                      },
+                      { title: 'FOC Qty', dataIndex: 'focQuantity', key: 'focQuantity', align: 'right', render: (v) => Number(v || 0) > 0 ? <Tag color="orange">{v}</Tag> : '-' },
+                      { title: 'Sample Qty', dataIndex: 'sampleQuantity', key: 'sampleQuantity', align: 'right', render: (v) => Number(v || 0) > 0 ? <Tag color="purple">{v}</Tag> : '-' },
+                      { title: 'Total Qty', dataIndex: 'totalQuantity', key: 'totalQuantity', align: 'right', render: (v) => <Text strong type="success">{v}</Text> },
                       { title: 'Sales Rep', dataIndex: 'salesRepName', key: 'salesRepName' },
                       { title: 'Sales Team', dataIndex: 'salesTeam', key: 'salesTeam' },
                       { title: 'Remark', dataIndex: 'remark', key: 'remark' }

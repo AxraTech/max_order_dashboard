@@ -183,7 +183,7 @@ export const Users: React.FC = () => {
           columns={[
             { title: 'User', render: (_, r) => <div><Text strong>{r.firstName} {r.lastName}</Text><br /><Text type="secondary">{r.email}</Text></div> },
             { title: 'Phone', dataIndex: 'phone', render: (v) => v || '-' },
-            { title: 'Role', render: (_, r) => <Tag color={r.role.name === 'SUPER_ADMIN' ? 'red' : r.role.name === 'BRANCH_MANAGER' ? 'blue' : 'default'}>{r.role.displayName}</Tag> },
+            { title: 'Role', render: (_, r) => <Tag color={r.role.name === 'SUPER_ADMIN' ? 'red' : r.role.name === 'SR_ADMIN' ? 'purple' : r.role.name === 'BRANCH_MANAGER' ? 'blue' : 'default'}>{r.role.displayName}</Tag> },
             { title: 'Branch', render: (_, r) => r.branch ? <Text>{r.branch.name} ({r.branch.code})</Text> : <Tag>HQ / Global</Tag> },
             { title: 'Status', render: (_, r) => <Tag color={r.isActive ? 'green' : 'red'}>{r.isActive ? 'Active' : 'Inactive'}</Tag> },
             { title: 'Last Login', dataIndex: 'lastLoginAt', render: (v) => v ? new Date(v).toLocaleString() : '-' },

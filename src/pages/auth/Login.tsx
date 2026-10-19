@@ -23,6 +23,9 @@ export const Login: React.FC = () => {
     }
   };
 
+  const queryParams = new URLSearchParams(location.search);
+  const isUnauthorized = queryParams.get('unauthorized') === 'true';
+
   return (
     <div style={{
       minHeight: '100vh',
@@ -60,8 +63,18 @@ export const Login: React.FC = () => {
           <Text type="secondary">Sign in to the Admin Dashboard</Text>
         </div>
 
+        {isUnauthorized && !error && (
+          <Alert 
+            message="Access Denied" 
+            description="Your account cannot access the Admin Dashboard. SR Portal accounts must sign in via the SR Portal." 
+            type="error" 
+            showIcon 
+            style={{ marginBottom: '24px', borderRadius: '8px' }} 
+          />
+        )}
+
         {error && (
-          <Alert title={error} type="error" showIcon style={{ marginBottom: '24px', borderRadius: '8px' }} />
+          <Alert message={error} type="error" showIcon style={{ marginBottom: '24px', borderRadius: '8px' }} />
         )}
 
         <Form

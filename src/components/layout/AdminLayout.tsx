@@ -181,6 +181,7 @@ export const AdminLayout: React.FC = () => {
       case '/masters':
         return hasModuleAccess('MASTER_DATA');
       case '/invoices':
+        return hasModuleAccess('INVOICING') || role === 'INVENTORY_OFFICER';
       case '/customers':
       case '/suppliers':
       case '/dealers':

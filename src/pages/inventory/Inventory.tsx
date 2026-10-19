@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Card, Typography, Table, Tag, Input, Select, Space, Row, Col, Button, Modal, Form, InputNumber, DatePicker, Checkbox, Tabs, message, Popconfirm, Upload, Collapse, Switch } from 'antd';
-import { SearchOutlined, CalendarOutlined, PlusOutlined, EditOutlined, DeleteOutlined, UploadOutlined, FileExcelOutlined, FilePdfOutlined, SwapRightOutlined } from '@ant-design/icons';
+import { Card, Typography, Table, Tag, Input, Select, Space, Row, Col, Button, Modal, Form, InputNumber, DatePicker, Checkbox, Tabs, message, Popconfirm, Upload, Collapse, Switch, Alert, Tooltip } from 'antd';
+import { SearchOutlined, CalendarOutlined, PlusOutlined, EditOutlined, DeleteOutlined, UploadOutlined, FileExcelOutlined, FilePdfOutlined, SwapRightOutlined, LockOutlined, UnlockOutlined, HistoryOutlined, SafetyCertificateOutlined, ArrowDownOutlined, ArrowUpOutlined } from '@ant-design/icons';
 import { api } from '../../services/api';
 import dayjs from 'dayjs';
 import * as XLSX from 'xlsx';
@@ -15,6 +15,7 @@ interface BatchInfo {
   expiryDate: string;
   quantity: number;
   reservedQty: number;
+  manualBlockedQty?: number;
   returnedQty: number;
   sampleQty: number;
   focQty: number;
@@ -33,6 +34,7 @@ interface StockItem {
   productId: string;
   quantity: number;
   reservedQty: number;
+  manualBlockedQty?: number;
   damagedQty: number;
   returnedQty: number;
   sampleQty: number;
@@ -111,6 +113,16 @@ export const Inventory: React.FC = () => {
   const [isEditBatchOpen, setIsEditBatchOpen] = useState(false);
   const [batchForm] = Form.useForm();
 
+  // Manual Block & Release State
+  const [blockModalOpen, setBlockModalOpen] = useState(false);
+  const [selectedBatchForBlock, setSelectedBatchForBlock] = useState<{ batch: BatchInfo; stock: StockItem } | null>(null);
+  const [blockActiveTab, setBlockActiveTab] = useState<'block' | 'release' | 'history'>('block');
+  const [blockHistory, setBlockHistory] = useState<any[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  const [blockSubmitting, setBlockSubmitting] = useState(false);
+  const [blockForm] = Form.useForm();
+  const [releaseForm] = Form.useForm();
+
   // Tabs & Filters state
   const [activeTab, setActiveTab] = useState<string>('all'); // 'all' or 'expired'
   const [search, setSearch] = useState('');
@@ -120,6 +132,18 @@ export const Inventory: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [importing, setImporting] = useState(false);
+
+  // Inventory History & Movement Ledger State
+  const [movementHistory, setMovementHistory] = useState<any[]>([]);
+  const [loadingMovements, setLoadingMovements] = useState(false);
+  const [historyTotal, setHistoryTotal] = useState(0);
+  const [historyPage, setHistoryPage] = useState(1);
+  const [historyLimit, setHistoryLimit] = useState(20);
+  const [historyType, setHistoryType] = useState<string>('all');
+  const [historyReferenceType, setHistoryReferenceType] = useState<string>('all');
+  const [historyWarehouse, setHistoryWarehouse] = useState<string>('all');
+  const [historySearch, setHistorySearch] = useState<string>('');
+  const [historyDateRange, setHistoryDateRange] = useState<[dayjs.Dayjs | null, dayjs.Dayjs | null] | null>(null);
 
 
   const handleImportExcel = async (file: any) => {
@@ -187,7 +211,7 @@ export const Inventory: React.FC = () => {
       allStocks.forEach((item: any) => {
         if (item.batches && item.batches.length > 0) {
           item.batches.forEach((batch: any) => {
-            const available = batch.quantity - batch.reservedQty;
+            const available = Math.max(0, batch.quantity - batch.reservedQty - (batch.damageStock || 0));
             const expiry = new Date(batch.expiryDate);
             const isExpired = expiry < new Date();
             const thirtyDays = new Date();
@@ -213,6 +237,7 @@ export const Inventory: React.FC = () => {
               'Returned Qty': batch.returnedQty || 0,
               'Sample Qty': batch.sampleQty || 0,
               'FOC Qty': batch.focQty || 0,
+              'Damage Qty': batch.damageStock || 0,
               'Available Qty': available,
               'COGS (MMK)': cogs,
               'Selling Price (MMK)': sp,
@@ -224,7 +249,7 @@ export const Inventory: React.FC = () => {
             });
           });
         } else {
-          const available = item.quantity - item.reservedQty;
+          const available = Math.max(0, item.quantity - item.reservedQty - (item.damagedQty || 0));
           exportData.push({
             'No': index++,
             'Product Code': item.product.code,
@@ -239,6 +264,7 @@ export const Inventory: React.FC = () => {
             'Returned Qty': item.returnedQty || 0,
             'Sample Qty': item.sampleQty || 0,
             'FOC Qty': item.focQty || 0,
+            'Damage Qty': item.damagedQty || 0,
             'Available Qty': available,
             'Warehouse': item.warehouse.name,
             'Branch': item.warehouse.branch.name,
@@ -284,7 +310,7 @@ export const Inventory: React.FC = () => {
       doc.text(`Generated on: ${new Date().toLocaleString()} | Total Items: ${allStocks.length}`, 14, 22);
       
       const tableColumn = [
-        'No', 'Code', 'SKU', 'Product Name', 'UOM', 'Batch No', 'Expiry Date', 'Team', 'Physical Qty', 'Block Qty', 'Returned Qty', 'Sample Qty', 'FOC Qty', 'Available Qty', 'Warehouse', 'Status'
+        'No', 'Code', 'SKU', 'Product Name', 'UOM', 'Batch No', 'Expiry Date', 'Team', 'Physical Qty', 'Block Qty', 'Returned Qty', 'Sample Qty', 'FOC Qty', 'Damage Qty', 'Available Qty', 'Warehouse', 'Status'
       ];
       
       const tableRows: any[] = [];
@@ -293,7 +319,7 @@ export const Inventory: React.FC = () => {
       allStocks.forEach((item: any) => {
         if (item.batches && item.batches.length > 0) {
           item.batches.forEach((batch: any) => {
-            const available = batch.quantity - batch.reservedQty;
+            const available = Math.max(0, batch.quantity - batch.reservedQty - (batch.damageStock || 0));
             const expiry = new Date(batch.expiryDate);
             const isExpired = expiry < new Date();
             const thirtyDays = new Date();
@@ -314,13 +340,14 @@ export const Inventory: React.FC = () => {
               batch.returnedQty || 0,
               batch.sampleQty || 0,
               batch.focQty || 0,
+              batch.damageStock || 0,
               available,
               `${item.warehouse.name} (${item.warehouse.branch.name.replace(' Branch', '')})`,
               status
             ]);
           });
         } else {
-          const available = item.quantity - item.reservedQty;
+          const available = Math.max(0, item.quantity - item.reservedQty - (item.damagedQty || 0));
           const status = available <= item.minStockLevel ? 'CRITICAL' : (available <= item.safetyStock ? 'LOW' : 'HEALTHY');
           tableRows.push([
             index++,
@@ -336,6 +363,7 @@ export const Inventory: React.FC = () => {
             item.returnedQty || 0,
             item.sampleQty || 0,
             item.focQty || 0,
+            item.damagedQty || 0,
             available,
             `${item.warehouse.name} (${item.warehouse.branch.name.replace(' Branch', '')})`,
             status
@@ -506,8 +534,101 @@ export const Inventory: React.FC = () => {
   };
 
   useEffect(() => {
-    fetchStocks();
+    if (activeTab === 'history') {
+      fetchMovementHistory();
+    } else {
+      fetchStocks();
+    }
   }, [search, selectedWarehouse, currentPage, pageSize, activeTab, warehouses]);
+
+  useEffect(() => {
+    if (activeTab === 'history') {
+      fetchMovementHistory();
+    }
+  }, [activeTab, historyPage, historyLimit, historyType, historyReferenceType, historyWarehouse, historyDateRange, historySearch]);
+
+  const fetchMovementHistory = async () => {
+    try {
+      setLoadingMovements(true);
+      const params: any = {
+        page: historyPage,
+        limit: historyLimit,
+        search: historySearch || undefined,
+        warehouseId: historyWarehouse !== 'all' ? historyWarehouse : undefined,
+        type: historyType !== 'all' ? historyType : undefined,
+        referenceType: historyReferenceType !== 'all' ? historyReferenceType : undefined,
+      };
+      if (historyDateRange && historyDateRange[0] && historyDateRange[1]) {
+        params.startDate = historyDateRange[0].startOf('day').toISOString();
+        params.endDate = historyDateRange[1].endOf('day').toISOString();
+      }
+      const res = await api.get('/inventory/history', { params });
+      if (res.data.success) {
+        setMovementHistory(res.data.data);
+        setHistoryTotal(res.data.meta?.total || 0);
+      }
+    } catch (err) {
+      console.error('Failed to fetch movement history:', err);
+    } finally {
+      setLoadingMovements(false);
+    }
+  };
+
+  const handleExportHistoryExcel = async () => {
+    const msgKey = 'export-history-excel';
+    try {
+      message.loading({ content: 'Generating Inventory History Excel report...', key: msgKey });
+      const params: any = {
+        limit: 10000,
+        search: historySearch || undefined,
+        warehouseId: historyWarehouse !== 'all' ? historyWarehouse : undefined,
+        type: historyType !== 'all' ? historyType : undefined,
+        referenceType: historyReferenceType !== 'all' ? historyReferenceType : undefined,
+      };
+      if (historyDateRange && historyDateRange[0] && historyDateRange[1]) {
+        params.startDate = historyDateRange[0].startOf('day').toISOString();
+        params.endDate = historyDateRange[1].endOf('day').toISOString();
+      }
+
+      const res = await api.get('/inventory/history', { params });
+      if (!res.data.success) throw new Error('Failed to fetch history');
+
+      const data = res.data.data;
+      const exportRows = data.map((item: any, idx: number) => ({
+        'No': idx + 1,
+        'Date & Time': dayjs(item.createdAt).format('YYYY-MM-DD HH:mm:ss'),
+        'Product Code': item.product?.code || '-',
+        'SKU': item.product?.sku || '-',
+        'Product Name': item.product?.name || '-',
+        'UOM': item.product?.uom || '-',
+        'Movement Type': item.type,
+        'Quantity Changed': (item.type === 'STOCK_OUT' || item.type === 'TRANSFER_OUT') ? -item.quantity : item.quantity,
+        'Batch Number': item.batchNumber || '-',
+        'Expiry Date': item.expiryDate ? dayjs(item.expiryDate).format('YYYY-MM-DD') : '-',
+        'Warehouse': item.warehouse?.name || '-',
+        'Branch': item.warehouse?.branch?.name || '-',
+        'Reference Type': item.referenceType || '-',
+        'Reference ID / Doc #': item.referenceId || '-',
+        'Notes / Reason': item.notes || '-',
+        'Logged By': item.creator ? `${item.creator.firstName || ''} ${item.creator.lastName || ''}`.trim() || item.creator.email : '-',
+      }));
+
+      const worksheet = XLSX.utils.json_to_sheet(exportRows);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Stock Movements');
+      XLSX.writeFile(workbook, `Inventory_History_Ledger_${dayjs().format('YYYY-MM-DD')}.xlsx`);
+      message.success({ content: 'Inventory history exported successfully', key: msgKey });
+    } catch (err: any) {
+      console.error('Failed to export history:', err);
+      message.error({ content: 'Failed to export history report', key: msgKey });
+    }
+  };
+
+  const handleViewBatchHistory = (batchNumber: string) => {
+    setActiveTab('history');
+    setHistorySearch(batchNumber);
+    setHistoryPage(1);
+  };
 
   const fetchWarehouses = async () => {
     try {
@@ -634,6 +755,91 @@ export const Inventory: React.FC = () => {
     }
   };
 
+  const handleOpenBlockModal = (batch: BatchInfo, stock: StockItem) => {
+    setSelectedBatchForBlock({ batch, stock });
+    setBlockActiveTab('block');
+    blockForm.resetFields();
+    releaseForm.resetFields();
+    setBlockModalOpen(true);
+    fetchBlockHistory(batch.id);
+  };
+
+  const fetchBlockHistory = async (batchId: string) => {
+    try {
+      setLoadingHistory(true);
+      const res = await api.get(`/inventory/batches/${batchId}/block-history`);
+      if (res.data.success) {
+        setBlockHistory(res.data.data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch block history:', err);
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
+
+  const handleBlockSubmit = async (values: any) => {
+    if (!selectedBatchForBlock) return;
+    try {
+      setBlockSubmitting(true);
+      const res = await api.post(`/inventory/batches/${selectedBatchForBlock.batch.id}/block`, {
+        quantity: Number(values.quantity),
+        reason: values.reason,
+        notes: values.notes,
+      });
+      if (res.data.success) {
+        message.success(`Successfully blocked ${values.quantity} units`);
+        blockForm.resetFields();
+        await fetchStocks();
+        const updatedBatch = {
+          ...selectedBatchForBlock.batch,
+          reservedQty: (selectedBatchForBlock.batch.reservedQty || 0) + Number(values.quantity),
+          manualBlockedQty: (selectedBatchForBlock.batch.manualBlockedQty || 0) + Number(values.quantity),
+        };
+        setSelectedBatchForBlock({
+          ...selectedBatchForBlock,
+          batch: updatedBatch,
+        });
+        fetchBlockHistory(selectedBatchForBlock.batch.id);
+      }
+    } catch (err: any) {
+      message.error(err.response?.data?.message || 'Failed to block stock');
+    } finally {
+      setBlockSubmitting(false);
+    }
+  };
+
+  const handleReleaseSubmit = async (values: any) => {
+    if (!selectedBatchForBlock) return;
+    try {
+      setBlockSubmitting(true);
+      const res = await api.post(`/inventory/batches/${selectedBatchForBlock.batch.id}/release`, {
+        quantity: Number(values.quantity),
+        reason: values.reason,
+        notes: values.notes,
+      });
+      if (res.data.success) {
+        message.success(`Successfully released ${values.quantity} units`);
+        releaseForm.resetFields();
+        await fetchStocks();
+        const updatedBatch = {
+          ...selectedBatchForBlock.batch,
+          reservedQty: Math.max(0, (selectedBatchForBlock.batch.reservedQty || 0) - Number(values.quantity)),
+          manualBlockedQty: Math.max(0, (selectedBatchForBlock.batch.manualBlockedQty || 0) - Number(values.quantity)),
+        };
+        setSelectedBatchForBlock({
+          ...selectedBatchForBlock,
+          batch: updatedBatch,
+        });
+        fetchBlockHistory(selectedBatchForBlock.batch.id);
+      }
+    } catch (err: any) {
+      message.error(err.response?.data?.message || 'Failed to release stock');
+    } finally {
+      setBlockSubmitting(false);
+    }
+  };
+
   const handleAddInventory = async (values: any) => {
     try {
       setSubmitting(true);
@@ -661,7 +867,10 @@ export const Inventory: React.FC = () => {
   };
 
   const getStockStatusTag = (stock: StockItem) => {
-    const available = stock.quantity - stock.reservedQty;
+    const damaged = stock.batches && stock.batches.length > 0
+      ? stock.batches.reduce((sum, b) => sum + (b.damageStock || 0), 0)
+      : (stock.damagedQty || 0);
+    const available = Math.max(0, stock.quantity - stock.reservedQty - damaged);
     if (available <= stock.minStockLevel) {
       return <Tag color="red" style={{ fontWeight: 600, border: 'none', borderRadius: '12px' }}>CRITICAL STOCK</Tag>;
     }
@@ -671,10 +880,10 @@ export const Inventory: React.FC = () => {
     return <Tag color="green" style={{ fontWeight: 600, border: 'none', borderRadius: '12px' }}>HEALTHY</Tag>;
   };
 
-  const getBatchStatusTag = (expiryStr: string, qty: number, reserved: number) => {
+  const getBatchStatusTag = (expiryStr: string, qty: number, reserved: number, damage: number = 0) => {
     const expiry = new Date(expiryStr);
     const now = new Date();
-    const available = qty - reserved;
+    const available = qty - reserved - damage;
 
     if (expiry < now) {
       return <Tag color="red" style={{ border: 'none', borderRadius: '12px', fontWeight: 500 }}>EXPIRED (DO NOT USE)</Tag>;
@@ -746,10 +955,29 @@ export const Inventory: React.FC = () => {
       },
       {
         title: 'Block Qty',
-        dataIndex: 'reservedQty',
         key: 'reservedQty',
-        width: 90,
-        render: (val: number) => <span style={{ color: val > 0 ? 'var(--warning-color)' : 'inherit' }}>{val}</span>,
+        width: 120,
+        render: (_: any, batch: BatchInfo) => {
+          const totalBlock = batch.reservedQty || 0;
+          const manualBlock = batch.manualBlockedQty || 0;
+          const orderBlock = Math.max(0, totalBlock - manualBlock);
+          return (
+            <div>
+              <span style={{ color: totalBlock > 0 ? '#F59E0B' : 'inherit', fontWeight: totalBlock > 0 ? 600 : 'normal' }}>
+                {totalBlock}
+              </span>
+              {manualBlock > 0 && (
+                <div style={{ marginTop: 2 }}>
+                  <Tooltip title={`Order Reserved: ${orderBlock} | Manual Blocked: ${manualBlock}`}>
+                    <Tag color="orange" style={{ fontSize: '10px', padding: '0 5px', lineHeight: '16px', margin: 0, borderRadius: '4px', cursor: 'default' }}>
+                      <LockOutlined style={{ marginRight: 3 }} />Manual: {manualBlock}
+                    </Tag>
+                  </Tooltip>
+                </div>
+              )}
+            </div>
+          );
+        },
       },
       {
         title: 'Returned Qty',
@@ -783,11 +1011,14 @@ export const Inventory: React.FC = () => {
         title: 'Available Qty',
         key: 'available',
         width: 100,
-        render: (_: any, batch: BatchInfo) => (
-          <strong style={{ color: (batch.quantity - batch.reservedQty) > 0 ? '#10B981' : '#9CA3AF' }}>
-            {batch.quantity - batch.reservedQty}
-          </strong>
-        ),
+        render: (_: any, batch: BatchInfo) => {
+          const avail = Math.max(0, batch.quantity - batch.reservedQty - (batch.damageStock || 0));
+          return (
+            <strong style={{ color: avail > 0 ? '#10B981' : '#9CA3AF' }}>
+              {avail}
+            </strong>
+          );
+        },
       },
       {
         title: 'Total Value',
@@ -843,7 +1074,7 @@ export const Inventory: React.FC = () => {
         title: 'Regulatory Status',
         key: 'status',
         width: 140,
-        render: (_: any, batch: BatchInfo) => getBatchStatusTag(batch.expiryDate, batch.quantity, batch.reservedQty),
+        render: (_: any, batch: BatchInfo) => getBatchStatusTag(batch.expiryDate, batch.quantity, batch.reservedQty, batch.damageStock || 0),
       },
       {
         title: 'Notes',
@@ -855,10 +1086,32 @@ export const Inventory: React.FC = () => {
       {
         title: 'Actions',
         key: 'actions',
-        width: 80,
+        width: 130,
         fixed: 'right' as const,
         render: (_: any, batch: BatchInfo) => (
           <Space size="small">
+            <Tooltip title="View Batch History">
+              <Button
+                type="text"
+                size="small"
+                style={{ color: '#6366F1', padding: '0 4px', fontWeight: 500 }}
+                icon={<HistoryOutlined />}
+                onClick={() => handleViewBatchHistory(batch.batchNumber)}
+              >
+                History
+              </Button>
+            </Tooltip>
+            <Tooltip title="Manual Block / Release">
+              <Button
+                type="text"
+                size="small"
+                style={{ color: '#D97706', padding: '0 4px', fontWeight: 500 }}
+                icon={<LockOutlined />}
+                onClick={() => handleOpenBlockModal(batch, record)}
+              >
+                Block / Release
+              </Button>
+            </Tooltip>
             <Button
               type="text"
               size="small"
@@ -965,12 +1218,29 @@ export const Inventory: React.FC = () => {
     },
     {
       title: 'Block Qty',
-      dataIndex: 'reservedQty',
       key: 'reservedQty',
-      width: 100,
-      render: (val: number, record: StockItem) => (
-        <span style={{ color: val > 0 ? '#F59E0B' : 'inherit' }}>{val} {record.product.uom}</span>
-      ),
+      width: 120,
+      render: (_: any, record: StockItem) => {
+        const total = record.reservedQty || 0;
+        const manual = record.manualBlockedQty ?? (record.batches?.reduce((acc, b) => acc + (b.manualBlockedQty || 0), 0) || 0);
+        const order = Math.max(0, total - manual);
+        return (
+          <div>
+            <span style={{ color: total > 0 ? '#F59E0B' : 'inherit', fontWeight: total > 0 ? 600 : 'normal' }}>
+              {total} {record.product.uom}
+            </span>
+            {manual > 0 && (
+              <div style={{ marginTop: 2 }}>
+                <Tooltip title={`Order Reserved: ${order} | Manual Blocked: ${manual}`}>
+                  <Tag color="orange" style={{ fontSize: '10px', padding: '0 5px', lineHeight: '16px', margin: 0, borderRadius: '4px', cursor: 'default' }}>
+                    <LockOutlined style={{ marginRight: 3 }} />Manual: {manual}
+                  </Tag>
+                </Tooltip>
+              </div>
+            )}
+          </div>
+        );
+      },
     },
     {
       title: 'Returned Qty',
@@ -1000,11 +1270,29 @@ export const Inventory: React.FC = () => {
       ),
     },
     {
+      title: 'Damage Qty',
+      key: 'damagedQty',
+      width: 105,
+      render: (_: any, record: StockItem) => {
+        const damaged = record.batches && record.batches.length > 0
+          ? record.batches.reduce((sum, b) => sum + (b.damageStock || 0), 0)
+          : (record.damagedQty || 0);
+        return (
+          <span style={{ color: damaged > 0 ? '#EF4444' : 'inherit', fontWeight: damaged > 0 ? 600 : 'normal' }}>
+            {damaged} {record.product.uom}
+          </span>
+        );
+      },
+    },
+    {
       title: 'Available Qty',
       key: 'available',
       width: 110,
       render: (_: any, record: StockItem) => {
-        const available = record.quantity - record.reservedQty;
+        const damaged = record.batches && record.batches.length > 0
+          ? record.batches.reduce((sum, b) => sum + (b.damageStock || 0), 0)
+          : (record.damagedQty || 0);
+        const available = Math.max(0, record.quantity - record.reservedQty - damaged);
         return (
           <strong style={{ color: available > record.safetyStock ? '#10B981' : '#EF4444' }}>
             {available} {record.product.uom}
@@ -1059,39 +1347,43 @@ export const Inventory: React.FC = () => {
         <Space>
           <Button
             icon={<FileExcelOutlined />}
-            onClick={handleExportExcel}
+            onClick={activeTab === 'history' ? handleExportHistoryExcel : handleExportExcel}
             style={{ borderRadius: '12px' }}
           >
-            Export Excel
+            {activeTab === 'history' ? 'Export Ledger Excel' : 'Export Excel'}
           </Button>
-          <Button
-            icon={<FilePdfOutlined />}
-            onClick={handleExportPDF}
-            style={{ borderRadius: '12px' }}
-          >
-            Export PDF
-          </Button>
-          <Button
-            href="/templates/Inventory_Import_Template.xlsx"
-            download="Inventory_Import_Template.xlsx"
-            icon={<FileExcelOutlined />}
-            style={{ borderRadius: '12px' }}
-          >
-            Template
-          </Button>
-          <Upload
-            accept=".xlsx"
-            showUploadList={false}
-            beforeUpload={handleImportExcel}
-          >
-            <Button
-              icon={<UploadOutlined />}
-              style={{ borderRadius: '12px' }}
-              loading={importing}
-            >
-              Import Excel
-            </Button>
-          </Upload>
+          {activeTab !== 'history' && (
+            <>
+              <Button
+                icon={<FilePdfOutlined />}
+                onClick={handleExportPDF}
+                style={{ borderRadius: '12px' }}
+              >
+                Export PDF
+              </Button>
+              <Button
+                href="/templates/Inventory_Import_Template.xlsx"
+                download="Inventory_Import_Template.xlsx"
+                icon={<FileExcelOutlined />}
+                style={{ borderRadius: '12px' }}
+              >
+                Template
+              </Button>
+              <Upload
+                accept=".xlsx"
+                showUploadList={false}
+                beforeUpload={handleImportExcel}
+              >
+                <Button
+                  icon={<UploadOutlined />}
+                  style={{ borderRadius: '12px' }}
+                  loading={importing}
+                >
+                  Import Excel
+                </Button>
+              </Upload>
+            </>
+          )}
 
           <Button
             type="primary"
@@ -1104,119 +1396,429 @@ export const Inventory: React.FC = () => {
         </Space>
       </div>
 
-      {/* Tabs for All Stock vs Expired */}
+      {/* Tabs for All Stock vs Expired vs HQ vs History */}
       <Tabs 
         activeKey={activeTab} 
         onChange={(key) => {
           setActiveTab(key);
           setCurrentPage(1);
+          if (key === 'history') setHistoryPage(1);
         }}
         style={{ marginBottom: '20px' }}
         items={[
           { key: 'all', label: 'All Inventory Stock' },
           { key: 'expired', label: 'Expired Inventory Only' },
-          { key: 'hq', label: 'HeadQuarter / Main Inventory' }
+          { key: 'hq', label: 'HeadQuarter / Main Inventory' },
+          { key: 'history', label: (
+            <span>
+              <HistoryOutlined style={{ marginRight: 6 }} />
+              Inventory History & Movement Ledger
+            </span>
+          ) },
         ]}
       />
 
-      {/* Filter controls */}
-      <Card className="glass-card" variant="borderless" style={{ marginBottom: '20px' }}>
-        <Row gutter={[16, 16]} align="middle">
-          <Col xs={24} sm={12} md={8}>
-            <Input
-              placeholder="Search strictly by product (Name, SKU, Code, Generic...)"
-              prefix={<SearchOutlined style={{ color: 'var(--text-secondary)' }} />}
-              value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
-                setCurrentPage(1);
+      {activeTab === 'history' ? (
+        /* Inventory History & Movement Ledger View */
+        <div>
+          {/* History Filters Card */}
+          <Card className="glass-card" variant="borderless" style={{ marginBottom: '20px' }}>
+            <Row gutter={[12, 12]} align="middle">
+              <Col xs={24} sm={12} md={7}>
+                <Input
+                  placeholder="Search (Product, SKU, Batch #, Order #, PO #, Notes)..."
+                  prefix={<SearchOutlined style={{ color: 'var(--text-secondary)' }} />}
+                  value={historySearch}
+                  onChange={(e) => {
+                    setHistorySearch(e.target.value);
+                    setHistoryPage(1);
+                  }}
+                  style={{ borderRadius: '10px' }}
+                  allowClear
+                />
+              </Col>
+              <Col xs={12} sm={6} md={4}>
+                <Select
+                  style={{ width: '100%', borderRadius: '10px' }}
+                  value={historyType}
+                  onChange={(val) => {
+                    setHistoryType(val);
+                    setHistoryPage(1);
+                  }}
+                  options={[
+                    { value: 'all', label: 'All Movements' },
+                    { value: 'STOCK_OUT', label: 'Stock Out (Orders)' },
+                    { value: 'STOCK_IN', label: 'Stock In (PO/Add)' },
+                    { value: 'TRANSFER_OUT', label: 'Transfer Out' },
+                    { value: 'TRANSFER_IN', label: 'Transfer In' },
+                    { value: 'MANUAL_BLOCKED', label: 'Manual Blocked' },
+                    { value: 'MANUAL_RELEASED', label: 'Manual Released' },
+                    { value: 'RESERVED', label: 'Order Allocated' },
+                    { value: 'UNRESERVED', label: 'Order Cancelled' },
+                    { value: 'ADJUSTMENT', label: 'Adjustments' },
+                  ]}
+                />
+              </Col>
+              <Col xs={12} sm={6} md={4}>
+                <Select
+                  style={{ width: '100%', borderRadius: '10px' }}
+                  value={historyReferenceType}
+                  onChange={(val) => {
+                    setHistoryReferenceType(val);
+                    setHistoryPage(1);
+                  }}
+                  options={[
+                    { value: 'all', label: 'All Reference Types' },
+                    { value: 'ORDER', label: 'Customer Orders' },
+                    { value: 'PURCHASE_ORDER', label: 'Purchase Orders' },
+                    { value: 'TRANSFER', label: 'Warehouse Transfers' },
+                    { value: 'RETURN', label: 'Sales Returns' },
+                    { value: 'MANUAL_BLOCK', label: 'Manual Blocks' },
+                    { value: 'MANUAL_RELEASE', label: 'Manual Releases' },
+                    { value: 'MANUAL_ENTRY', label: 'Manual Stock Entries' },
+                    { value: 'ADJUSTMENT', label: 'Batch Adjustments' },
+                  ]}
+                />
+              </Col>
+              <Col xs={12} sm={6} md={4}>
+                <Select
+                  style={{ width: '100%', borderRadius: '10px' }}
+                  value={historyWarehouse}
+                  onChange={(val) => {
+                    setHistoryWarehouse(val);
+                    setHistoryPage(1);
+                  }}
+                >
+                  <Select.Option value="all">All Warehouses</Select.Option>
+                  {warehouses.map((wh) => (
+                    <Select.Option key={wh.id} value={wh.id}>
+                      {wh.name}
+                    </Select.Option>
+                  ))}
+                </Select>
+              </Col>
+              <Col xs={24} sm={12} md={5}>
+                <DatePicker.RangePicker
+                  style={{ width: '100%', borderRadius: '10px' }}
+                  value={historyDateRange as any}
+                  onChange={(dates) => {
+                    setHistoryDateRange(dates as any);
+                    setHistoryPage(1);
+                  }}
+                />
+              </Col>
+            </Row>
+          </Card>
+
+          {/* Movement History Table */}
+          <Card className="glass-card" variant="borderless" styles={{ body: { padding: '0px' } }}>
+            <Table
+              size="small"
+              loading={loadingMovements}
+              dataSource={movementHistory.map((item, idx) => ({ ...item, key: item.id || idx }))}
+              scroll={{ x: 'max-content' }}
+              pagination={{
+                current: historyPage,
+                pageSize: historyLimit,
+                total: historyTotal,
+                showSizeChanger: true,
+                onChange: (page, size) => {
+                  setHistoryPage(page);
+                  setHistoryLimit(size);
+                },
+                style: { padding: '16px' },
               }}
-              style={{ borderRadius: '12px' }}
-              allowClear
+              columns={[
+                {
+                  title: 'Date & Time',
+                  dataIndex: 'createdAt',
+                  key: 'createdAt',
+                  width: 140,
+                  fixed: 'left' as const,
+                  render: (dateStr: string) => (
+                    <div>
+                      <div style={{ fontWeight: 600, color: '#111827' }}>
+                        {dayjs(dateStr).format('YYYY-MM-DD')}
+                      </div>
+                      <Text type="secondary" style={{ fontSize: '11px' }}>
+                        {dayjs(dateStr).format('HH:mm:ss')}
+                      </Text>
+                    </div>
+                  ),
+                },
+                {
+                  title: 'Product (Medicine)',
+                  key: 'product',
+                  width: 220,
+                  render: (_: any, record: any) => (
+                    <div>
+                      <div style={{ fontWeight: 600, color: '#111827' }}>
+                        {record.product?.name || '-'}
+                      </div>
+                      <Space size="small" style={{ fontSize: '11px', color: '#6B7280' }}>
+                        <span>SKU: <Text code>{record.product?.sku || '-'}</Text></span>
+                        {record.product?.genericName && <span>Gen: {record.product.genericName}</span>}
+                      </Space>
+                    </div>
+                  ),
+                },
+                {
+                  title: 'Warehouse / Branch',
+                  key: 'warehouse',
+                  width: 170,
+                  render: (_: any, record: any) => (
+                    <div>
+                      <div style={{ fontWeight: 500 }}>{record.warehouse?.name || '-'}</div>
+                      {record.warehouse?.branch && (
+                        <Tag color="blue" style={{ fontSize: '10px', padding: '0 4px', lineHeight: '16px', margin: 0, borderRadius: '4px' }}>
+                          {record.warehouse.branch.name}
+                        </Tag>
+                      )}
+                    </div>
+                  ),
+                },
+                {
+                  title: 'Movement Type',
+                  dataIndex: 'type',
+                  key: 'type',
+                  width: 150,
+                  render: (type: string) => {
+                    switch (type) {
+                      case 'STOCK_OUT':
+                        return <Tag color="volcano" icon={<ArrowDownOutlined />}>STOCK OUT (Order)</Tag>;
+                      case 'STOCK_IN':
+                        return <Tag color="green" icon={<ArrowUpOutlined />}>STOCK IN (PO/Add)</Tag>;
+                      case 'TRANSFER_OUT':
+                        return <Tag color="blue" icon={<SwapRightOutlined />}>TRANSFER OUT</Tag>;
+                      case 'TRANSFER_IN':
+                        return <Tag color="cyan" icon={<SwapRightOutlined />}>TRANSFER IN</Tag>;
+                      case 'MANUAL_BLOCKED':
+                        return <Tag color="orange" icon={<LockOutlined />}>QC / MANUAL HOLD</Tag>;
+                      case 'MANUAL_RELEASED':
+                        return <Tag color="lime" icon={<UnlockOutlined />}>RELEASED TO SALE</Tag>;
+                      case 'RESERVED':
+                        return <Tag color="gold">ORDER ALLOCATED</Tag>;
+                      case 'UNRESERVED':
+                        return <Tag color="default">ORDER CANCELLED</Tag>;
+                      case 'ADJUSTMENT':
+                        return <Tag color="purple">ADJUSTMENT</Tag>;
+                      default:
+                        return <Tag>{type}</Tag>;
+                    }
+                  },
+                },
+                {
+                  title: 'Batch Number',
+                  dataIndex: 'batchNumber',
+                  key: 'batchNumber',
+                  width: 140,
+                  render: (batch: string | null) => (
+                    batch ? (
+                      <Text code style={{ fontWeight: 600, color: '#374151' }}>
+                        {batch}
+                      </Text>
+                    ) : <Text type="secondary">-</Text>
+                  ),
+                },
+                {
+                  title: 'Expiry Date',
+                  dataIndex: 'expiryDate',
+                  key: 'expiryDate',
+                  width: 130,
+                  render: (expStr: string | null) => {
+                    if (!expStr) return <Text type="secondary">-</Text>;
+                    const exp = new Date(expStr);
+                    const isExpired = exp < new Date();
+                    const sixtyDays = new Date();
+                    sixtyDays.setDate(sixtyDays.getDate() + 60);
+                    const isNear = exp <= sixtyDays;
+
+                    return (
+                      <Space size={4} style={{ color: isExpired ? '#EF4444' : (isNear ? '#D97706' : '#10B981') }}>
+                        <CalendarOutlined />
+                        <span style={{ fontWeight: isExpired || isNear ? 600 : 'normal' }}>
+                          {dayjs(expStr).format('DD/MM/YYYY')}
+                        </span>
+                      </Space>
+                    );
+                  },
+                },
+                {
+                  title: 'Quantity Delta',
+                  key: 'quantity',
+                  width: 120,
+                  render: (_: any, record: any) => {
+                    const isOutflow = record.type === 'STOCK_OUT' || record.type === 'TRANSFER_OUT';
+                    const isInflow = record.type === 'STOCK_IN' || record.type === 'TRANSFER_IN';
+                    const isHold = record.type === 'MANUAL_BLOCKED';
+                    const isRelease = record.type === 'MANUAL_RELEASED';
+
+                    const color = isOutflow ? '#EF4444' : (isInflow ? '#10B981' : (isHold ? '#D97706' : (isRelease ? '#059669' : 'inherit')));
+                    const prefix = isOutflow ? '-' : (isInflow ? '+' : '');
+
+                    return (
+                      <strong style={{ color, fontSize: '13px' }}>
+                        {prefix}{record.quantity} {record.product?.uom || ''}
+                      </strong>
+                    );
+                  },
+                },
+                {
+                  title: 'Reference / Document',
+                  key: 'reference',
+                  width: 180,
+                  render: (_: any, record: any) => {
+                    const refType = record.referenceType;
+                    const refId = record.referenceId;
+                    if (!refType && !refId) return <Text type="secondary">-</Text>;
+
+                    return (
+                      <div>
+                        {refType === 'ORDER' && <Tag color="magenta">Order #{refId}</Tag>}
+                        {refType === 'PURCHASE_ORDER' && <Tag color="purple">PO #{refId}</Tag>}
+                        {refType === 'TRANSFER' && <Tag color="geekblue">Transfer #{refId}</Tag>}
+                        {refType === 'RETURN' && <Tag color="cyan">Return #{refId}</Tag>}
+                        {refType === 'MANUAL_ENTRY' && <Tag color="green">Manual Entry</Tag>}
+                        {refType === 'MANUAL_BLOCK' && <Tag color="orange">Manual Block</Tag>}
+                        {refType === 'MANUAL_RELEASE' && <Tag color="lime">Manual Release</Tag>}
+                        {refType === 'ADJUSTMENT' && <Tag color="purple">Adjustment</Tag>}
+                        {!['ORDER', 'PURCHASE_ORDER', 'TRANSFER', 'RETURN', 'MANUAL_ENTRY', 'MANUAL_BLOCK', 'MANUAL_RELEASE', 'ADJUSTMENT'].includes(refType) && (
+                          <Tag>{refType}: {refId}</Tag>
+                        )}
+                      </div>
+                    );
+                  },
+                },
+                {
+                  title: 'Reason / Notes',
+                  dataIndex: 'notes',
+                  key: 'notes',
+                  width: 250,
+                  render: (text: string | null) => (
+                    <div style={{ maxWidth: 240, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={text || ''}>
+                      {text || '-'}
+                    </div>
+                  ),
+                },
+                {
+                  title: 'Logged By',
+                  key: 'creator',
+                  width: 140,
+                  render: (_: any, record: any) => (
+                    record.creator ? (
+                      <span style={{ fontWeight: 500, color: '#4B5563' }}>
+                        {`${record.creator.firstName || ''} ${record.creator.lastName || ''}`.trim() || record.creator.email}
+                      </span>
+                    ) : <Text type="secondary">-</Text>
+                  ),
+                },
+              ]}
             />
-          </Col>
-          <Col xs={24} sm={12} md={6}>
-            <Select
-              style={{ width: '100%', borderRadius: '12px' }}
-              value={activeTab === 'hq' ? (warehouses.find(w => w.code === 'WH-HQ' || w.name?.toLowerCase().includes('hq') || w.name?.toLowerCase().includes('main'))?.id || 'all') : selectedWarehouse}
-              onChange={(val) => {
-                setSelectedWarehouse(val);
-                setCurrentPage(1);
-              }}
-              disabled={activeTab === 'hq'}
-            >
-              <Select.Option value="all">All Warehouses</Select.Option>
-              {warehouses.map((wh) => (
-                <Select.Option key={wh.id} value={wh.id}>
-                  {wh.name} ({wh.branch.name})
-                </Select.Option>
-              ))}
-            </Select>
-          </Col>
-        </Row>
-      </Card>
-
-      {/* Table listing */}
-      {/* Horizontal scroll indicator */}
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'flex-end',
-        marginBottom: '8px',
-        gap: '8px',
-      }}>
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px',
-          background: 'linear-gradient(135deg, rgba(99,102,241,0.08), rgba(139,92,246,0.08))',
-          border: '1px solid rgba(99,102,241,0.25)',
-          borderRadius: '24px',
-          padding: '5px 14px',
-          fontSize: '12px',
-          color: '#6366F1',
-          fontWeight: 600,
-          letterSpacing: '0.01em',
-        }}>
-          {/* Animated arrow track */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
-            <span style={{ animation: 'scrollArrow 1.4s ease-in-out infinite', display: 'inline-block', opacity: 0.4 }}>›</span>
-            <span style={{ animation: 'scrollArrow 1.4s ease-in-out 0.2s infinite', display: 'inline-block', opacity: 0.65 }}>›</span>
-            <span style={{ animation: 'scrollArrow 1.4s ease-in-out 0.4s infinite', display: 'inline-block', opacity: 0.9 }}>›</span>
-          </div>
-          Scroll horizontally to view all columns
-          <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
-            <span style={{ animation: 'scrollArrow 1.4s ease-in-out infinite', display: 'inline-block', opacity: 0.4 }}>›</span>
-            <span style={{ animation: 'scrollArrow 1.4s ease-in-out 0.2s infinite', display: 'inline-block', opacity: 0.65 }}>›</span>
-            <span style={{ animation: 'scrollArrow 1.4s ease-in-out 0.4s infinite', display: 'inline-block', opacity: 0.9 }}>›</span>
-          </div>
+          </Card>
         </div>
-      </div>
+      ) : (
+        /* Standard Stock & Batches View */
+        <>
+          {/* Filter controls */}
+          <Card className="glass-card" variant="borderless" style={{ marginBottom: '20px' }}>
+            <Row gutter={[16, 16]} align="middle">
+              <Col xs={24} sm={12} md={8}>
+                <Input
+                  placeholder="Search strictly by product (Name, SKU, Code, Generic...)"
+                  prefix={<SearchOutlined style={{ color: 'var(--text-secondary)' }} />}
+                  value={search}
+                  onChange={(e) => {
+                    setSearch(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  style={{ borderRadius: '12px' }}
+                  allowClear
+                />
+              </Col>
+              <Col xs={24} sm={12} md={6}>
+                <Select
+                  style={{ width: '100%', borderRadius: '12px' }}
+                  value={activeTab === 'hq' ? (warehouses.find(w => w.code === 'WH-HQ' || w.name?.toLowerCase().includes('hq') || w.name?.toLowerCase().includes('main'))?.id || 'all') : selectedWarehouse}
+                  onChange={(val) => {
+                    setSelectedWarehouse(val);
+                    setCurrentPage(1);
+                  }}
+                  disabled={activeTab === 'hq'}
+                >
+                  <Select.Option value="all">All Warehouses</Select.Option>
+                  {warehouses.map((wh) => (
+                    <Select.Option key={wh.id} value={wh.id}>
+                      {wh.name} ({wh.branch.name})
+                    </Select.Option>
+                  ))}
+                </Select>
+              </Col>
+            </Row>
+          </Card>
 
-      <Card className="glass-card" variant="borderless" styles={{ body: { padding: '0px' } }}>
-        <Table
-          columns={columns}
-          dataSource={filteredStocks.map((item, idx) => ({ ...item, key: item.id || idx }))}
-          expandable={{
-            expandedRowRender,
-            rowExpandable: (record) => record.batches && record.batches.length > 0,
-          }}
-          loading={loading}
-          size="small"
-          scroll={{ x: 'max-content' }}
-          pagination={{
-            current: currentPage,
-            pageSize: pageSize,
-            total: activeTab === 'expired' ? filteredStocks.length : totalItems,
-            showSizeChanger: true,
-            onChange: (page, size) => {
-              setCurrentPage(page);
-              setPageSize(size);
-            },
-            style: { padding: '16px' },
-          }}
-        />
-      </Card>
+          {/* Table listing */}
+          {/* Horizontal scroll indicator */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'flex-end',
+            marginBottom: '8px',
+            gap: '8px',
+          }}>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              background: 'linear-gradient(135deg, rgba(99,102,241,0.08), rgba(139,92,246,0.08))',
+              border: '1px solid rgba(99,102,241,0.25)',
+              borderRadius: '24px',
+              padding: '5px 14px',
+              fontSize: '12px',
+              color: '#6366F1',
+              fontWeight: 600,
+              letterSpacing: '0.01em',
+            }}>
+              {/* Animated arrow track */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+                <span style={{ animation: 'scrollArrow 1.4s ease-in-out infinite', display: 'inline-block', opacity: 0.4 }}>›</span>
+                <span style={{ animation: 'scrollArrow 1.4s ease-in-out 0.2s infinite', display: 'inline-block', opacity: 0.65 }}>›</span>
+                <span style={{ animation: 'scrollArrow 1.4s ease-in-out 0.4s infinite', display: 'inline-block', opacity: 0.9 }}>›</span>
+              </div>
+              Scroll horizontally to view all columns
+              <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+                <span style={{ animation: 'scrollArrow 1.4s ease-in-out infinite', display: 'inline-block', opacity: 0.4 }}>›</span>
+                <span style={{ animation: 'scrollArrow 1.4s ease-in-out 0.2s infinite', display: 'inline-block', opacity: 0.65 }}>›</span>
+                <span style={{ animation: 'scrollArrow 1.4s ease-in-out 0.4s infinite', display: 'inline-block', opacity: 0.9 }}>›</span>
+              </div>
+            </div>
+          </div>
+
+          <Card className="glass-card" variant="borderless" styles={{ body: { padding: '0px' } }}>
+            <Table
+              columns={columns}
+              dataSource={filteredStocks.map((item, idx) => ({ ...item, key: item.id || idx }))}
+              expandable={{
+                expandedRowRender,
+                rowExpandable: (record) => record.batches && record.batches.length > 0,
+              }}
+              loading={loading}
+              size="small"
+              scroll={{ x: 'max-content' }}
+              pagination={{
+                current: currentPage,
+                pageSize: pageSize,
+                total: activeTab === 'expired' ? filteredStocks.length : totalItems,
+                showSizeChanger: true,
+                onChange: (page, size) => {
+                  setCurrentPage(page);
+                  setPageSize(size);
+                },
+                style: { padding: '16px' },
+              }}
+            />
+          </Card>
+        </>
+      )}
 
       {/* Add Inventory Modal */}
       <Modal
@@ -2111,6 +2713,381 @@ export const Inventory: React.FC = () => {
             </Space>
           </Form.Item>
         </Form>
+      </Modal>
+
+      {/* Manual Block & Release Modal */}
+      <Modal
+        title={
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <SafetyCertificateOutlined style={{ color: '#F59E0B', fontSize: '20px' }} />
+            <span>Manual Stock Block & Release</span>
+          </div>
+        }
+        open={blockModalOpen}
+        onCancel={() => {
+          setBlockModalOpen(false);
+          setSelectedBatchForBlock(null);
+          blockForm.resetFields();
+          releaseForm.resetFields();
+        }}
+        footer={null}
+        width={720}
+        destroyOnClose
+      >
+        {selectedBatchForBlock && (() => {
+          const { batch, stock } = selectedBatchForBlock;
+          const totalReserved = batch.reservedQty || 0;
+          const manualBlocked = batch.manualBlockedQty || 0;
+          const orderReserved = Math.max(0, totalReserved - manualBlocked);
+          const damaged = batch.damageStock || 0;
+          const availableToBlock = Math.max(0, batch.quantity - totalReserved - damaged);
+
+          return (
+            <div>
+              {/* Product & Batch Summary Card */}
+              <div style={{
+                background: 'linear-gradient(135deg, rgba(249, 250, 251, 0.9) 0%, rgba(243, 244, 246, 0.8) 100%)',
+                border: '1px solid #E5E7EB',
+                borderRadius: '10px',
+                padding: '14px 16px',
+                marginBottom: '16px'
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+                  <div>
+                    <div style={{ fontSize: '15px', fontWeight: 600, color: '#111827' }}>
+                      {stock.product.name}
+                    </div>
+                    <Space size="middle" style={{ fontSize: '12px', color: '#6B7280', marginTop: 2 }} wrap>
+                      <span>SKU: <Text code>{stock.product.sku}</Text></span>
+                      <span>Batch: <Text code>{batch.batchNumber}</Text></span>
+                      <span>Warehouse: <strong>{stock.warehouse.name}</strong></span>
+                      <span>Expiry: <strong>{dayjs(batch.expiryDate).format('DD/MM/YYYY')}</strong></span>
+                    </Space>
+                  </div>
+                  <Tag color="purple" style={{ borderRadius: '6px', fontWeight: 600 }}>
+                    {stock.product.uom}
+                  </Tag>
+                </div>
+
+                {/* Stock metrics tiles */}
+                <Row gutter={8}>
+                  <Col span={6}>
+                    <div style={{ background: '#fff', border: '1px solid #E5E7EB', borderRadius: '8px', padding: '8px 10px', textAlign: 'center' }}>
+                      <div style={{ fontSize: '11px', color: '#6B7280', textTransform: 'uppercase', fontWeight: 500 }}>Physical Qty</div>
+                      <div style={{ fontSize: '16px', fontWeight: 700, color: '#1F2937', marginTop: 2 }}>{batch.quantity}</div>
+                    </div>
+                  </Col>
+                  <Col span={6}>
+                    <div style={{ background: '#ECFDF5', border: '1px solid #A7F3D0', borderRadius: '8px', padding: '8px 10px', textAlign: 'center' }}>
+                      <div style={{ fontSize: '11px', color: '#065F46', textTransform: 'uppercase', fontWeight: 500 }}>Available to Block</div>
+                      <div style={{ fontSize: '16px', fontWeight: 700, color: '#059669', marginTop: 2 }}>{availableToBlock}</div>
+                    </div>
+                  </Col>
+                  <Col span={6}>
+                    <div style={{ background: '#FEF3C7', border: '1px solid #FDE68A', borderRadius: '8px', padding: '8px 10px', textAlign: 'center' }}>
+                      <div style={{ fontSize: '11px', color: '#92400E', textTransform: 'uppercase', fontWeight: 500 }}>Manual Blocked</div>
+                      <div style={{ fontSize: '16px', fontWeight: 700, color: '#D97706', marginTop: 2 }}>{manualBlocked}</div>
+                    </div>
+                  </Col>
+                  <Col span={6}>
+                    <div style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: '8px', padding: '8px 10px', textAlign: 'center' }}>
+                      <div style={{ fontSize: '11px', color: '#1E40AF', textTransform: 'uppercase', fontWeight: 500 }}>Order Reserved</div>
+                      <div style={{ fontSize: '16px', fontWeight: 700, color: '#2563EB', marginTop: 2 }}>{orderReserved}</div>
+                    </div>
+                  </Col>
+                </Row>
+              </div>
+
+              {/* Action Tabs: Block vs Release vs History */}
+              <Tabs
+                activeKey={blockActiveTab}
+                onChange={(key) => setBlockActiveTab(key as any)}
+                items={[
+                  {
+                    key: 'block',
+                    label: (
+                      <span>
+                        <LockOutlined style={{ marginRight: 6, color: '#D97706' }} />
+                        Manual Block (Hold)
+                      </span>
+                    ),
+                    children: (
+                      <div style={{ paddingTop: 8 }}>
+                        <Alert
+                          type="warning"
+                          showIcon
+                          message="Block Stock from Orders"
+                          description="Quantity entered here will be added to Block Qty immediately. Sales Reps and orders will NOT be able to allocate or deduct this stock until manually released."
+                          style={{ marginBottom: 16, borderRadius: '8px' }}
+                        />
+
+                        <Form
+                          form={blockForm}
+                          layout="vertical"
+                          onFinish={handleBlockSubmit}
+                          initialValues={{ reason: 'Quality Control (QC) Hold' }}
+                        >
+                          <Row gutter={16}>
+                            <Col span={12}>
+                              <Form.Item
+                                name="quantity"
+                                label="Block Quantity"
+                                rules={[
+                                  { required: true, message: 'Please enter block quantity' },
+                                  {
+                                    validator: async (_, value) => {
+                                      if (value !== undefined && value !== null) {
+                                        if (value <= 0) return Promise.reject(new Error('Quantity must be greater than 0'));
+                                        if (value > availableToBlock) return Promise.reject(new Error(`Cannot exceed available quantity (${availableToBlock})`));
+                                      }
+                                      return Promise.resolve();
+                                    }
+                                  }
+                                ]}
+                              >
+                                <InputNumber
+                                  style={{ width: '100%', borderRadius: '8px' }}
+                                  min={1}
+                                  max={availableToBlock}
+                                  placeholder={`Max: ${availableToBlock}`}
+                                  disabled={availableToBlock <= 0}
+                                />
+                              </Form.Item>
+                            </Col>
+                            <Col span={12}>
+                              <Form.Item
+                                name="reason"
+                                label="Hold Reason"
+                                rules={[{ required: true, message: 'Please select or enter reason' }]}
+                              >
+                                <Select
+                                  style={{ borderRadius: '8px' }}
+                                  options={[
+                                    { value: 'Quality Control (QC) Hold', label: 'Quality Control (QC) Hold' },
+                                    { value: 'Quarantine / Regulatory Inspection', label: 'Quarantine / Regulatory Inspection' },
+                                    { value: 'Hospital Tender / Special Allocation Hold', label: 'Hospital Tender / Special Allocation Hold' },
+                                    { value: 'Damaged / Packaging Investigation', label: 'Damaged / Packaging Investigation' },
+                                    { value: 'Management Discretion Hold', label: 'Management Discretion Hold' },
+                                    { value: 'Other', label: 'Other (specify in notes)' },
+                                  ]}
+                                />
+                              </Form.Item>
+                            </Col>
+                          </Row>
+
+                          <Form.Item name="notes" label="Notes / Reference Details (Optional)">
+                            <Input.TextArea
+                              rows={2}
+                              placeholder="e.g. Tender #T-2026-09 for Yangon General Hospital or QC sample batch ticket #884"
+                              style={{ borderRadius: '8px' }}
+                            />
+                          </Form.Item>
+
+                          <div style={{ textAlign: 'right', marginTop: 16 }}>
+                            <Space>
+                              <Button onClick={() => setBlockModalOpen(false)}>Cancel</Button>
+                              <Button
+                                type="primary"
+                                htmlType="submit"
+                                loading={blockSubmitting}
+                                disabled={availableToBlock <= 0}
+                                style={{ background: '#F59E0B', borderColor: '#F59E0B', color: '#fff', fontWeight: 600 }}
+                                icon={<LockOutlined />}
+                              >
+                                Confirm Manual Block
+                              </Button>
+                            </Space>
+                          </div>
+                        </Form>
+                      </div>
+                    )
+                  },
+                  {
+                    key: 'release',
+                    label: (
+                      <span>
+                        <UnlockOutlined style={{ marginRight: 6, color: '#10B981' }} />
+                        Manual Release ({manualBlocked})
+                      </span>
+                    ),
+                    children: (
+                      <div style={{ paddingTop: 8 }}>
+                        {manualBlocked <= 0 ? (
+                          <Alert
+                            type="info"
+                            showIcon
+                            message="No Manual Blocked Stock Available to Release"
+                            description="This batch does not currently have any manually blocked units. Note: stock reserved for pending customer orders cannot be released manually; it is handled automatically when orders are approved, rejected, or cancelled."
+                            style={{ marginBottom: 16, borderRadius: '8px' }}
+                          />
+                        ) : (
+                          <>
+                            <Alert
+                              type="success"
+                              showIcon
+                              message="Release Blocked Stock Back to Available"
+                              description={`You can release up to ${manualBlocked} manually blocked unit(s) back into available stock for normal order allocation.`}
+                              style={{ marginBottom: 16, borderRadius: '8px' }}
+                            />
+
+                            <Form
+                              form={releaseForm}
+                              layout="vertical"
+                              onFinish={handleReleaseSubmit}
+                              initialValues={{ reason: 'Quality Control (QC) Passed' }}
+                            >
+                              <Row gutter={16}>
+                                <Col span={12}>
+                                  <Form.Item
+                                    name="quantity"
+                                    label="Release Quantity"
+                                    rules={[
+                                      { required: true, message: 'Please enter release quantity' },
+                                      {
+                                        validator: async (_, value) => {
+                                          if (value !== undefined && value !== null) {
+                                            if (value <= 0) return Promise.reject(new Error('Quantity must be greater than 0'));
+                                            if (value > manualBlocked) return Promise.reject(new Error(`Cannot exceed manual blocked quantity (${manualBlocked})`));
+                                          }
+                                          return Promise.resolve();
+                                        }
+                                      }
+                                    ]}
+                                  >
+                                    <InputNumber
+                                      style={{ width: '100%', borderRadius: '8px' }}
+                                      min={1}
+                                      max={manualBlocked}
+                                      placeholder={`Max: ${manualBlocked}`}
+                                    />
+                                  </Form.Item>
+                                </Col>
+                                <Col span={12}>
+                                  <Form.Item
+                                    name="reason"
+                                    label="Release Reason"
+                                    rules={[{ required: true, message: 'Please select or enter reason' }]}
+                                  >
+                                    <Select
+                                      style={{ borderRadius: '8px' }}
+                                      options={[
+                                        { value: 'Quality Control (QC) Passed', label: 'Quality Control (QC) Passed' },
+                                        { value: 'Quarantine Cleared', label: 'Quarantine Cleared' },
+                                        { value: 'Hospital Tender Hold Cancelled / Returned', label: 'Hospital Tender Hold Cancelled / Returned' },
+                                        { value: 'Investigation Completed - Cleared for Sale', label: 'Investigation Completed - Cleared for Sale' },
+                                        { value: 'Management Release Approval', label: 'Management Release Approval' },
+                                        { value: 'Other', label: 'Other (specify in notes)' },
+                                      ]}
+                                    />
+                                  </Form.Item>
+                                </Col>
+                              </Row>
+
+                              <Form.Item name="notes" label="Notes / Reference Details (Optional)">
+                                <Input.TextArea
+                                  rows={2}
+                                  placeholder="e.g. QC lab report #992 signed off, returning stock to active inventory"
+                                  style={{ borderRadius: '8px' }}
+                                />
+                              </Form.Item>
+
+                              <div style={{ textAlign: 'right', marginTop: 16 }}>
+                                <Space>
+                                  <Button onClick={() => setBlockModalOpen(false)}>Cancel</Button>
+                                  <Button
+                                    type="primary"
+                                    htmlType="submit"
+                                    loading={blockSubmitting}
+                                    style={{ background: '#10B981', borderColor: '#10B981', color: '#fff', fontWeight: 600 }}
+                                    icon={<UnlockOutlined />}
+                                  >
+                                    Confirm Manual Release
+                                  </Button>
+                                </Space>
+                              </div>
+                            </Form>
+                          </>
+                        )}
+                      </div>
+                    )
+                  },
+                  {
+                    key: 'history',
+                    label: (
+                      <span>
+                        <HistoryOutlined style={{ marginRight: 6 }} />
+                        Block / Release History
+                      </span>
+                    ),
+                    children: (
+                      <div style={{ paddingTop: 8 }}>
+                        <Table
+                          size="small"
+                          loading={loadingHistory}
+                          dataSource={blockHistory.map((h, i) => ({ ...h, key: h.id || i }))}
+                          pagination={{ pageSize: 5 }}
+                          columns={[
+                            {
+                              title: 'Date & Time',
+                              dataIndex: 'createdAt',
+                              key: 'createdAt',
+                              width: 140,
+                              render: (val: string) => dayjs(val).format('YYYY-MM-DD HH:mm'),
+                            },
+                            {
+                              title: 'Action',
+                              dataIndex: 'type',
+                              key: 'type',
+                              width: 130,
+                              render: (type: string) => (
+                                type === 'MANUAL_BLOCKED' ? (
+                                  <Tag color="orange" icon={<LockOutlined />}>BLOCKED</Tag>
+                                ) : (
+                                  <Tag color="green" icon={<UnlockOutlined />}>RELEASED</Tag>
+                                )
+                              ),
+                            },
+                            {
+                              title: 'Quantity',
+                              dataIndex: 'quantity',
+                              key: 'quantity',
+                              width: 90,
+                              render: (qty: number, item: any) => (
+                                <strong style={{ color: item.type === 'MANUAL_BLOCKED' ? '#D97706' : '#059669' }}>
+                                  {item.type === 'MANUAL_BLOCKED' ? `+${qty}` : `-${qty}`}
+                                </strong>
+                              ),
+                            },
+                            {
+                              title: 'Reason & Notes',
+                              key: 'reason',
+                              render: (_: any, item: any) => (
+                                <div>
+                                  <div style={{ fontWeight: 500 }}>{item.reason || item.reference || '-'}</div>
+                                  {item.notes && <Text type="secondary" style={{ fontSize: '11px' }}>{item.notes}</Text>}
+                                </div>
+                              ),
+                            },
+                            {
+                              title: 'By User',
+                              key: 'user',
+                              width: 120,
+                              render: (_: any, item: any) => (
+                                item.user ? (
+                                  <span>{item.user.fullName || item.user.username}</span>
+                                ) : <Text type="secondary">-</Text>
+                              ),
+                            },
+                          ]}
+                        />
+                      </div>
+                    )
+                  }
+                ]}
+              />
+            </div>
+          );
+        })()}
       </Modal>
 
     </div>

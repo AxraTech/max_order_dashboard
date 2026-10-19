@@ -42,13 +42,15 @@ export interface RoleSummary {
 
 export type RoleName =
   | 'SUPER_ADMIN'
+  | 'SR_ADMIN'
   | 'HQ_MANAGER'
   | 'BRANCH_MANAGER'
   | 'SALES_REP'
   | 'MSR'
   | 'INVENTORY_OFFICER'
   | 'FINANCE_OFFICER'
-  | 'VIEWER_AUDITOR';
+  | 'VIEWER_AUDITOR'
+  | 'CUSTOMER';
 
 export type PermissionModule =
   | 'DASHBOARD'

@@ -25,6 +25,15 @@ export const useAuthStore = create<AuthState>((set) => ({
       const response = await api.post('/auth/login', credentials);
       const { user, accessToken, refreshToken } = response.data.data;
       
+      const ADMIN_ALLOWED_ROLES = ['SUPER_ADMIN', 'HQ_MANAGER', 'BRANCH_MANAGER', 'INVENTORY_OFFICER', 'FINANCE_OFFICER', 'VIEWER_AUDITOR', 'PURCHASE_ORDER'];
+      if (!ADMIN_ALLOWED_ROLES.includes(user.role?.name)) {
+        sessionStorage.removeItem('maxorder_access_token');
+        sessionStorage.removeItem('maxorder_refresh_token');
+        const errMessage = 'Access Denied: This account is for SR Portal management only and cannot access the Admin Dashboard.';
+        set({ error: errMessage, isLoading: false, isAuthenticated: false, user: null });
+        throw new Error(errMessage);
+      }
+
       sessionStorage.setItem('maxorder_access_token', accessToken);
       sessionStorage.setItem('maxorder_refresh_token', refreshToken);
       
@@ -35,7 +44,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       set({ user, isAuthenticated: true, isLoading: false });
     } catch (error: any) {
       set({ 
-        error: error.response?.data?.message || 'Login failed', 
+        error: error.message || error.response?.data?.message || 'Login failed', 
         isLoading: false 
       });
       throw error;
@@ -65,6 +74,14 @@ export const useAuthStore = create<AuthState>((set) => ({
       
       const response = await api.get('/auth/profile');
       const user = response.data.data;
+
+      const ADMIN_ALLOWED_ROLES = ['SUPER_ADMIN', 'HQ_MANAGER', 'BRANCH_MANAGER', 'INVENTORY_OFFICER', 'FINANCE_OFFICER', 'VIEWER_AUDITOR', 'PURCHASE_ORDER'];
+      if (!ADMIN_ALLOWED_ROLES.includes(user.role?.name)) {
+        sessionStorage.removeItem('maxorder_access_token');
+        sessionStorage.removeItem('maxorder_refresh_token');
+        set({ user: null, isAuthenticated: false, isLoading: false });
+        return;
+      }
       
       if (user.currencySymbol) {
         updateCurrencySymbol(user.currencySymbol);

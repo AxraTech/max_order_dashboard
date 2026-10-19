@@ -5,7 +5,7 @@ import {
 } from 'antd';
 import {
   SearchOutlined, ReloadOutlined, EyeOutlined, CloseCircleOutlined,
-  CheckCircleOutlined, MoreOutlined, FileExcelOutlined,
+  CheckCircleOutlined, MoreOutlined, FileExcelOutlined, EditOutlined,
 } from '@ant-design/icons';
 import * as XLSX from 'xlsx';
 import dayjs from 'dayjs';
@@ -24,10 +24,13 @@ const STATUS_COLOR: Record<string, string> = {
 
 interface OrderItem {
   id: string; quantity: number; unitPrice: number; totalPrice: number;
+  batchNumber?: string | null;
+  expiryDate?: string | null;
+  isManualBatch?: boolean;
   focQty?: number;
   sampleQty?: number;
   promoQty?: number;
-  product: { name: string; sku: string };
+  product: { id: string; name: string; sku: string };
 }
 interface OrderRecord {
   id: string; orderNumber: string; status: OrderStatus;
@@ -60,6 +63,11 @@ export const Orders: React.FC = () => {
   const [detailOpen, setDetailOpen] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [exportLoading, setExportLoading] = useState(false);
+  const [batchData, setBatchData] = useState<any>(null);
+  const [batchLoading, setBatchLoading] = useState(false);
+  const [batchModalOpen, setBatchModalOpen] = useState(false);
+  const [selectedItemForBatch, setSelectedItemForBatch] = useState<any>(null);
+  const [savingBatch, setSavingBatch] = useState(false);
   const { user } = useAuthStore();
 
   const handleExportExcel = async () => {
@@ -143,10 +151,52 @@ export const Orders: React.FC = () => {
     };
   }, [fetchOrders]);
 
+  const fetchAvailableBatches = async (id: string) => {
+    try {
+      setBatchLoading(true);
+      const res = await api.get(`/orders/${id}/available-batches`);
+      if (res.data.success) {
+        setBatchData(res.data.data);
+      }
+    } catch {
+      // Silently handle if not yet accessible
+    } finally {
+      setBatchLoading(false);
+    }
+  };
+
+  const handleSelectBatch = async (orderItemId: string, batchNumber: string) => {
+    if (!detailOrder) return;
+    try {
+      setSavingBatch(true);
+      const res = await api.patch(`/orders/${detailOrder.id}/items/batch`, {
+        allocations: [{ orderItemId, batchNumber }],
+      });
+      if (res.data.success) {
+        message.success(`Batch ${batchNumber} assigned successfully`);
+        const orderRes = await api.get(`/orders/${detailOrder.id}`);
+        if (orderRes.data.success) {
+          setDetailOrder(orderRes.data.data);
+        }
+        await fetchAvailableBatches(detailOrder.id);
+        setBatchModalOpen(false);
+        setSelectedItemForBatch(null);
+      }
+    } catch (err: any) {
+      message.error(err.response?.data?.message || 'Failed to update batch');
+    } finally {
+      setSavingBatch(false);
+    }
+  };
+
   const handleViewDetail = async (id: string) => {
     try {
       const res = await api.get(`/orders/${id}`);
-      if (res.data.success) { setDetailOrder(res.data.data); setDetailOpen(true); }
+      if (res.data.success) {
+        setDetailOrder(res.data.data);
+        setDetailOpen(true);
+        fetchAvailableBatches(id);
+      }
     } catch { message.error('Failed to load order details'); }
   };
 
@@ -239,8 +289,8 @@ export const Orders: React.FC = () => {
         items.push({ key: 'view', icon: <EyeOutlined />, label: 'View Details' });
         
         if (['SUBMITTED', 'PENDING'].includes(r.status)) {
-          if (user?.role?.name === 'SUPER_ADMIN' || user?.role?.name === 'HQ_MANAGER' || user?.role?.name === 'PURCHASE_ORDER') {
-            items.push({ key: 'po_accept', icon: <CheckCircleOutlined />, label: 'Action By PO' });
+          if (['SUPER_ADMIN', 'HQ_MANAGER', 'PURCHASE_ORDER', 'SR_ADMIN'].includes(user?.role?.name || '')) {
+            items.push({ key: 'po_accept', icon: <CheckCircleOutlined />, label: 'Action By PO / SR Admin' });
           }
           if (user?.role?.name === 'BRANCH_MANAGER') {
             items.push({ key: 'bm_accept', icon: <CheckCircleOutlined />, label: 'Action By Branch Manager' });
@@ -385,14 +435,14 @@ export const Orders: React.FC = () => {
           detailOrder ? (
             <Space>
               {['SUBMITTED', 'PENDING'].includes(detailOrder.status) &&
-               ['SUPER_ADMIN', 'HQ_MANAGER', 'PURCHASE_ORDER'].includes(user?.role?.name || '') && (
+               ['SUPER_ADMIN', 'HQ_MANAGER', 'PURCHASE_ORDER', 'SR_ADMIN'].includes(user?.role?.name || '') && (
                 <Button
                   type="primary"
                   icon={<CheckCircleOutlined />}
                   loading={actionLoading}
                   onClick={() => handleStatusTransition(detailOrder.id, 'FINANCE_REVIEW', 'Accepted, pending Finance')}
                 >
-                  Accept Order (PO)
+                  Accept Order (PO / SR Admin)
                 </Button>
               )}
               {['SUBMITTED', 'PENDING'].includes(detailOrder.status) &&
@@ -430,7 +480,7 @@ export const Orders: React.FC = () => {
             </Space>
           ) : null
         }
-        width={720} destroyOnHidden
+        width={920} destroyOnHidden
       >
         {detailOrder && (
           <>
@@ -485,51 +535,196 @@ export const Orders: React.FC = () => {
               const splitItems: any[] = [];
               if (detailOrder?.items) {
                 detailOrder.items.forEach((item: any) => {
+                  const itemBatchInfo = batchData?.items?.find((b: any) => b.orderItemId === item.id);
+                  const effectiveBatch = item.batchNumber || itemBatchInfo?.currentBatchNumber || null;
+                  const effectiveExpiry = item.expiryDate || itemBatchInfo?.currentExpiryDate || null;
+                  const isManual = item.isManualBatch ?? itemBatchInfo?.isManualBatch ?? false;
+
                   const chargeQty = item.quantity - (item.promoQty || 0);
                   if (chargeQty > 0) {
                     splitItems.push({
                       key: `${item.id}-charge`,
+                      orderItemId: item.id,
                       name: item.product.name,
                       sku: item.product.sku,
                       qty: chargeQty,
                       type: 'Charge',
                       unitPrice: item.unitPrice,
                       totalPrice: item.totalPrice,
+                      batchNumber: effectiveBatch,
+                      expiryDate: effectiveExpiry,
+                      isManual,
+                      rawItem: item,
+                      itemBatchInfo,
                     });
                   }
                   if (item.promoQty && item.promoQty > 0) {
                     splitItems.push({
                       key: `${item.id}-promo`,
+                      orderItemId: item.id,
                       name: item.product.name,
                       sku: item.product.sku,
                       qty: item.promoQty,
                       type: 'Promo',
                       unitPrice: 0,
                       totalPrice: 0,
+                      batchNumber: effectiveBatch,
+                      expiryDate: effectiveExpiry,
+                      isManual,
+                      rawItem: item,
+                      itemBatchInfo,
                     });
                   }
                   if (item.focQty && item.focQty > 0) {
                     splitItems.push({
                       key: `${item.id}-foc`,
+                      orderItemId: item.id,
                       name: item.product.name,
                       sku: item.product.sku,
                       qty: item.focQty,
                       type: 'FOC',
                       unitPrice: 0,
                       totalPrice: 0,
+                      batchNumber: effectiveBatch,
+                      expiryDate: effectiveExpiry,
+                      isManual,
+                      rawItem: item,
+                      itemBatchInfo,
                     });
                   }
                   if (item.sampleQty && item.sampleQty > 0) {
                     splitItems.push({
                       key: `${item.id}-sample`,
+                      orderItemId: item.id,
                       name: item.product.name,
                       sku: item.product.sku,
                       qty: item.sampleQty,
                       type: 'Sample',
                       unitPrice: 0,
                       totalPrice: 0,
+                      batchNumber: effectiveBatch,
+                      expiryDate: effectiveExpiry,
+                      isManual,
+                      rawItem: item,
+                      itemBatchInfo,
                     });
                   }
+                });
+              }
+
+              const canEditBatch = ['SUBMITTED', 'PENDING', 'BRANCH_REVIEW', 'FINANCE_REVIEW'].includes(detailOrder.status) &&
+                ['SUPER_ADMIN', 'HQ_MANAGER', 'PURCHASE_ORDER', 'SR_ADMIN', 'BRANCH_MANAGER'].includes(user?.role?.name || '');
+
+              const itemColumns: any[] = [
+                {
+                  title: 'Product',
+                  key: 'product',
+                  render: (_a: any, r: any) => (
+                    <div>
+                      <Text strong>{r.name}</Text>
+                      <br />
+                      <Text type="secondary" style={{ fontSize: '11px' }}>SKU: {r.sku}</Text>
+                    </div>
+                  ),
+                },
+                {
+                  title: 'Type',
+                  dataIndex: 'type',
+                  key: 'type',
+                  width: 85,
+                  render: (t: string) => (
+                    <Tag
+                      color={t === 'Charge' ? 'blue' : t === 'Promo' ? 'green' : t === 'FOC' ? 'pink' : 'purple'}
+                      style={{ border: 'none', borderRadius: '6px', fontWeight: 600 }}
+                    >
+                      {t === 'Promo' ? 'Promo Free' : t}
+                    </Tag>
+                  ),
+                },
+                { title: 'Qty', dataIndex: 'qty', key: 'qty', width: 65, render: (v: number) => <Text strong>{v}</Text> },
+                {
+                  title: 'Assigned Batch & Expiry',
+                  key: 'batch',
+                  width: 220,
+                  render: (_: any, r: any) => {
+                    return (
+                      <div>
+                        {r.batchNumber ? (
+                          <>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <Text strong style={{ color: '#1e293b', fontSize: '13px' }}>{r.batchNumber}</Text>
+                              {r.isManual ? (
+                                <Tag color="gold" style={{ fontSize: '10px', borderRadius: '4px', padding: '0 5px', lineHeight: '18px', fontWeight: 600, border: 'none' }}>
+                                  MANUAL
+                                </Tag>
+                              ) : (
+                                <Tag color="blue" style={{ fontSize: '10px', borderRadius: '4px', padding: '0 5px', lineHeight: '18px', fontWeight: 600, border: 'none' }}>
+                                  FIFO DEFAULT
+                                </Tag>
+                              )}
+                            </div>
+                            {r.expiryDate ? (
+                              <Text type="secondary" style={{ fontSize: '11px', display: 'block', marginTop: '2px' }}>
+                                Exp: <span style={{ fontWeight: 500, color: '#334155' }}>{dayjs(r.expiryDate).format('DD/MM/YYYY')}</span>
+                              </Text>
+                            ) : null}
+                          </>
+                        ) : (
+                          <Tag color="default" style={{ borderRadius: '4px', fontSize: '11px' }}>
+                            Auto FIFO at Approval
+                          </Tag>
+                        )}
+                      </div>
+                    );
+                  },
+                },
+                {
+                  title: 'Unit Price',
+                  dataIndex: 'unitPrice',
+                  key: 'unitPrice',
+                  width: 95,
+                  render: (v: number) => `${Math.round(Number(v)).toLocaleString()} ${CURRENCY.symbol}`,
+                },
+                {
+                  title: 'Total',
+                  dataIndex: 'totalPrice',
+                  key: 'totalPrice',
+                  width: 105,
+                  render: (v: number) => <Text strong>{Math.round(Number(v)).toLocaleString()} {CURRENCY.symbol}</Text>,
+                },
+              ];
+
+              if (canEditBatch) {
+                itemColumns.push({
+                  title: 'Batch Action',
+                  key: 'batchAction',
+                  width: 105,
+                  render: (_: any, r: any) => (
+                    <Button
+                      size="small"
+                      type="primary"
+                      icon={<EditOutlined style={{ color: '#ffffff' }} />}
+                      onClick={() => {
+                        const batchInfo = batchData?.items?.find((b: any) => b.orderItemId === r.orderItemId);
+                        setSelectedItemForBatch({
+                          orderItemId: r.orderItemId,
+                          productName: r.name,
+                          sku: r.sku,
+                          qty: r.qty,
+                          batchInfo: batchInfo || null,
+                        });
+                        setBatchModalOpen(true);
+                      }}
+                      style={{
+                        borderRadius: '6px',
+                        fontSize: '12px',
+                        fontWeight: 600,
+                        color: '#ffffff',
+                      }}
+                    >
+                      <span style={{ color: '#ffffff', fontWeight: 600 }}>Edit Batch</span>
+                    </Button>
+                  ),
                 });
               }
 
@@ -537,18 +732,10 @@ export const Orders: React.FC = () => {
                 <Table
                   size="small"
                   dataSource={splitItems}
-                  columns={[
-                    { title: 'Product', key: 'product', render: (_a: any, r: any) => <div><Text strong>{r.name}</Text><br/><Text type="secondary" style={{fontSize:'11px'}}>SKU: {r.sku}</Text></div> },
-                    { title: 'Type', dataIndex: 'type', key: 'type', width: 90, render: (t: string) => (
-                      <Tag color={t === 'Charge' ? 'blue' : t === 'Promo' ? 'green' : t === 'FOC' ? 'pink' : 'purple'} style={{ border: 'none', borderRadius: '6px', fontWeight: 600 }}>
-                        {t === 'Promo' ? 'Promo Free' : t}
-                      </Tag>
-                    )},
-                    { title: 'Qty', dataIndex: 'qty', key: 'qty', width: 80, render: (v: number) => <Text>{v}</Text> },
-                    { title: 'Unit Price', dataIndex: 'unitPrice', key: 'unitPrice', width: 110, render: (v: number) => `${Math.round(Number(v)).toLocaleString()} ${CURRENCY.symbol}` },
-                    { title: 'Total', dataIndex: 'totalPrice', key: 'totalPrice', width: 120, render: (v: number) => <Text strong>{Math.round(Number(v)).toLocaleString()} {CURRENCY.symbol}</Text> },
-                  ]}
-                  pagination={false} style={{ marginBottom: '20px' }}
+                  columns={itemColumns}
+                  loading={batchLoading}
+                  pagination={false}
+                  style={{ marginBottom: '20px' }}
                 />
               );
             })()}
@@ -595,6 +782,131 @@ export const Orders: React.FC = () => {
               </>
             )}
           </>
+        )}
+      </Modal>
+
+      {/* Batch Selection Override Modal */}
+      <Modal
+        title={
+          <div>
+            <Title level={5} style={{ margin: 0 }}>
+              Select Batch for {selectedItemForBatch?.productName}
+            </Title>
+            <Text type="secondary" style={{ fontSize: '12px' }}>
+              Branch: {detailOrder?.branch?.name} · SKU: {selectedItemForBatch?.sku} · Order Qty: {selectedItemForBatch?.qty}
+            </Text>
+          </div>
+        }
+        open={batchModalOpen}
+        onCancel={() => {
+          setBatchModalOpen(false);
+          setSelectedItemForBatch(null);
+        }}
+        footer={[
+          <Button key="close" onClick={() => { setBatchModalOpen(false); setSelectedItemForBatch(null); }}>
+            Close
+          </Button>,
+        ]}
+        width={720}
+        destroyOnHidden
+      >
+        <div style={{ marginBottom: '16px', background: '#f8fafc', padding: '12px 16px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+          <Text style={{ fontSize: '13px' }}>
+            <strong>Default Policy:</strong> The system automatically selects batches using <strong>FIFO (First In, First Out)</strong> based on arrival date in the branch warehouse. You can manually choose any batch below to override the default.
+          </Text>
+        </div>
+
+        {selectedItemForBatch?.batchInfo?.batches?.length > 0 ? (
+          <Table
+            size="small"
+            rowKey="id"
+            dataSource={selectedItemForBatch.batchInfo.batches}
+            pagination={false}
+            columns={[
+              {
+                title: 'Batch Number',
+                dataIndex: 'batchNumber',
+                key: 'batchNumber',
+                render: (val: string, record: any) => (
+                  <div>
+                    <Text strong style={{ fontSize: '13px' }}>{val}</Text>
+                    <div style={{ marginTop: '2px', display: 'flex', gap: '4px' }}>
+                      {record.isFifoDefault && (
+                        <Tag color="blue" style={{ fontSize: '10px', borderRadius: '4px', border: 'none', fontWeight: 600 }}>
+                          FIFO DEFAULT
+                        </Tag>
+                      )}
+                      {record.isCurrent && (
+                        <Tag color="green" style={{ fontSize: '10px', borderRadius: '4px', border: 'none', fontWeight: 600 }}>
+                          CURRENT
+                        </Tag>
+                      )}
+                    </div>
+                  </div>
+                ),
+              },
+              {
+                title: 'Expiry Date',
+                dataIndex: 'expiryDate',
+                key: 'expiryDate',
+                render: (val: string) => {
+                  const exp = dayjs(val);
+                  const daysLeft = exp.diff(dayjs(), 'day');
+                  const isNear = daysLeft <= 90;
+                  return (
+                    <div>
+                      <Text style={{ fontWeight: 500 }}>{exp.format('DD/MM/YYYY')}</Text>
+                      <br />
+                      <Tag color={isNear ? 'orange' : 'cyan'} style={{ fontSize: '10px', borderRadius: '4px', border: 'none', fontWeight: 500 }}>
+                        {daysLeft > 0 ? `${daysLeft} days left` : 'Expired'}
+                      </Tag>
+                    </div>
+                  );
+                },
+              },
+              {
+                title: 'Received (FIFO Order)',
+                dataIndex: 'createdAt',
+                key: 'createdAt',
+                render: (val: string) => dayjs(val).format('DD/MM/YYYY'),
+              },
+              {
+                title: 'Available Qty',
+                dataIndex: 'availableQty',
+                key: 'availableQty',
+                render: (qty: number) => {
+                  const hasEnough = qty >= (selectedItemForBatch?.qty || 0);
+                  return (
+                    <strong style={{ color: hasEnough ? '#10B981' : '#EF4444' }}>
+                      {qty}
+                    </strong>
+                  );
+                },
+              },
+              {
+                title: 'Action',
+                key: 'action',
+                render: (_: any, record: any) => {
+                  const hasEnough = record.availableQty >= (selectedItemForBatch?.qty || 0);
+                  const isCurrent = record.isCurrent;
+                  return (
+                    <Button
+                      type={isCurrent ? 'default' : 'primary'}
+                      size="small"
+                      disabled={!hasEnough || isCurrent || savingBatch}
+                      loading={savingBatch}
+                      onClick={() => handleSelectBatch(selectedItemForBatch.orderItemId, record.batchNumber)}
+                      style={{ borderRadius: '6px', fontWeight: 600 }}
+                    >
+                      {isCurrent ? 'Selected' : 'Select Batch'}
+                    </Button>
+                  );
+                },
+              },
+            ]}
+          />
+        ) : (
+          <Empty description="No active batches found in branch warehouse" />
         )}
       </Modal>
     </div>
