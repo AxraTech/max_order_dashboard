@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import dayjs from 'dayjs';
+import { formatDate } from '../../utils/date';
 import { Card, Typography, Table, Tag, Input, Select, Space, Row, Col, Tooltip, Button, Modal, Form, Switch, message, Popconfirm, Upload } from 'antd';
 import { SearchOutlined, PlusOutlined, EditOutlined, DeleteOutlined, DownloadOutlined, UploadOutlined, FileExcelOutlined } from '@ant-design/icons';
 import * as XLSX from 'xlsx-js-style';
@@ -417,7 +417,7 @@ export const Products: React.FC = () => {
             {price ? price.toLocaleString() : '0'} {CURRENCY.symbol}
           </strong>
           {record.activeBatch ? (
-            <Tooltip title={`FIFO Active Batch: ${record.activeBatch.batchNumber} (Expires: ${dayjs(record.activeBatch.expiryDate).format('DD/MM/YYYY')}, Available: ${record.activeBatch.availableQty} ${record.uom})`}>
+            <Tooltip title={`FIFO Active Batch: ${record.activeBatch.batchNumber} (Expires: ${formatDate(record.activeBatch.expiryDate)}, Available: ${record.activeBatch.availableQty} ${record.uom})`}>
               <Tag color="cyan" style={{ border: 'none', borderRadius: '6px', fontSize: '10px', marginTop: '2px', cursor: 'help' }}>
                 Batch: {record.activeBatch.batchNumber}
               </Tag>

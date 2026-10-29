@@ -9,6 +9,7 @@ import {
 } from '@ant-design/icons';
 import * as XLSX from 'xlsx';
 import dayjs from 'dayjs';
+import { formatDate, formatTime } from '../../utils/date';
 import { api } from '../../services/api';
 import { CURRENCY } from '../../types/index';
 import type { OrderStatus } from '../../types/index';
@@ -270,8 +271,15 @@ export const Orders: React.FC = () => {
       title: 'Date',
       dataIndex: 'orderDate',
       key: 'orderDate',
-      width: 110,
-      render: (d: string) => new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+      width: 105,
+      render: (d: string) => formatDate(d),
+    },
+    {
+      title: 'Time',
+      dataIndex: 'orderDate',
+      key: 'orderTime',
+      width: 95,
+      render: (d: string) => formatTime(d),
     },
     {
       title: 'Total',
@@ -490,7 +498,8 @@ export const Orders: React.FC = () => {
               <Descriptions.Item label="Sales Rep">
                 {detailOrder.salesRep ? `${detailOrder.salesRep.user?.firstName} ${detailOrder.salesRep.user?.lastName}` : '—'}
               </Descriptions.Item>
-              <Descriptions.Item label="Date">{new Date(detailOrder.orderDate).toLocaleString()}</Descriptions.Item>
+              <Descriptions.Item label="Date">{formatDate(detailOrder.orderDate)}</Descriptions.Item>
+              <Descriptions.Item label="Time">{formatTime(detailOrder.orderDate)}</Descriptions.Item>
               <Descriptions.Item label="Subtotal">{Math.round(Number(detailOrder.subtotal)).toLocaleString()} {CURRENCY.symbol}</Descriptions.Item>
               {Number(detailOrder.discount) - Number(detailOrder.manualDiscount || 0) > 0 && (
                 <Descriptions.Item label="Promo Discount">

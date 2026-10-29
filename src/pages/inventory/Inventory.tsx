@@ -3,6 +3,7 @@ import { Card, Typography, Table, Tag, Input, Select, Space, Row, Col, Button, M
 import { SearchOutlined, CalendarOutlined, PlusOutlined, EditOutlined, DeleteOutlined, UploadOutlined, FileExcelOutlined, FilePdfOutlined, SwapRightOutlined, LockOutlined, UnlockOutlined, HistoryOutlined, SafetyCertificateOutlined, ArrowDownOutlined, ArrowUpOutlined } from '@ant-design/icons';
 import { api } from '../../services/api';
 import dayjs from 'dayjs';
+import { formatDate, formatTime } from '../../utils/date';
 import * as XLSX from 'xlsx';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -927,7 +928,7 @@ export const Inventory: React.FC = () => {
           return (
             <Space style={{ color: isExpired ? '#EF4444' : 'inherit' }}>
               <CalendarOutlined />
-              <span>{new Date(dateStr).toLocaleDateString()}</span>
+              <span>{formatDate(dateStr)}</span>
             </Space>
           );
         },
@@ -937,7 +938,7 @@ export const Inventory: React.FC = () => {
         dataIndex: 'manufacturingDate',
         key: 'manufacturingDate',
         width: 110,
-        render: (dateStr: string | null) => dateStr ? new Date(dateStr).toLocaleDateString() : <Text type="secondary">-</Text>,
+        render: (dateStr: string | null) => dateStr ? formatDate(dateStr) : <Text type="secondary">-</Text>,
       },
       {
         title: 'Team',
@@ -1530,20 +1531,27 @@ export const Inventory: React.FC = () => {
               }}
               columns={[
                 {
-                  title: 'Date & Time',
+                  title: 'Date',
                   dataIndex: 'createdAt',
-                  key: 'createdAt',
-                  width: 140,
+                  key: 'createdAtDate',
+                  width: 105,
                   fixed: 'left' as const,
                   render: (dateStr: string) => (
-                    <div>
-                      <div style={{ fontWeight: 600, color: '#111827' }}>
-                        {dayjs(dateStr).format('YYYY-MM-DD')}
-                      </div>
-                      <Text type="secondary" style={{ fontSize: '11px' }}>
-                        {dayjs(dateStr).format('HH:mm:ss')}
-                      </Text>
+                    <div style={{ fontWeight: 600, color: '#111827' }}>
+                      {formatDate(dateStr)}
                     </div>
+                  ),
+                },
+                {
+                  title: 'Time',
+                  dataIndex: 'createdAt',
+                  key: 'createdAtTime',
+                  width: 95,
+                  fixed: 'left' as const,
+                  render: (dateStr: string) => (
+                    <Text type="secondary" style={{ fontSize: '11px' }}>
+                      {formatTime(dateStr)}
+                    </Text>
                   ),
                 },
                 {
@@ -3028,11 +3036,18 @@ export const Inventory: React.FC = () => {
                           pagination={{ pageSize: 5 }}
                           columns={[
                             {
-                              title: 'Date & Time',
+                              title: 'Date',
                               dataIndex: 'createdAt',
-                              key: 'createdAt',
-                              width: 140,
-                              render: (val: string) => dayjs(val).format('YYYY-MM-DD HH:mm'),
+                              key: 'createdAtDate',
+                              width: 105,
+                              render: (val: string) => formatDate(val),
+                            },
+                            {
+                              title: 'Time',
+                              dataIndex: 'createdAt',
+                              key: 'createdAtTime',
+                              width: 95,
+                              render: (val: string) => formatTime(val),
                             },
                             {
                               title: 'Action',

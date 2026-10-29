@@ -8,6 +8,7 @@ import {
   DeleteOutlined, PhoneOutlined, MailOutlined, UserOutlined
 } from '@ant-design/icons';
 import { api } from '../../services/api';
+import { formatDate, formatTime } from '../../utils/date';
 
 const { Title, Text } = Typography;
 
@@ -406,11 +407,17 @@ export const Suppliers: React.FC = () => {
                 {detailSupplier.isActive ? 'Active' : 'Inactive'}
               </Tag>
             </Descriptions.Item>
-            <Descriptions.Item label="Created At">
-              {new Date(detailSupplier.createdAt).toLocaleString()}
+            <Descriptions.Item label="Created Date">
+              {formatDate(detailSupplier.createdAt)}
             </Descriptions.Item>
-            <Descriptions.Item label="Last Updated">
-              {new Date(detailSupplier.updatedAt).toLocaleString()}
+            <Descriptions.Item label="Created Time">
+              {formatTime(detailSupplier.createdAt)}
+            </Descriptions.Item>
+            <Descriptions.Item label="Last Updated Date">
+              {formatDate(detailSupplier.updatedAt)}
+            </Descriptions.Item>
+            <Descriptions.Item label="Last Updated Time">
+              {formatTime(detailSupplier.updatedAt)}
             </Descriptions.Item>
           </Descriptions>
         )}

@@ -14,6 +14,7 @@ import {
 } from '@ant-design/icons';
 import * as XLSX from 'xlsx';
 import dayjs from 'dayjs';
+import { formatDate } from '../../utils/date';
 import { api } from '../../services/api';
 import { CURRENCY, CustomerCategory } from '../../types/index';
 
@@ -632,7 +633,7 @@ export const Customers: React.FC = () => {
           <Space size={4}>
             <CalendarOutlined style={{ color: 'var(--text-secondary)' }} />
             <Text style={{ fontSize: '12px' }}>
-              {dayjs(record.customerDate).format('DD/MM/YYYY')}
+              {formatDate(record.customerDate)}
             </Text>
           </Space>
         ) : <Text type="secondary">—</Text>
@@ -1420,10 +1421,10 @@ export const Customers: React.FC = () => {
               <Descriptions.Item label="AR COA">{detailCustomer.arcoa || 'AR'}</Descriptions.Item>
               <Descriptions.Item label="Division Code">{detailCustomer.division || '—'}</Descriptions.Item>
               <Descriptions.Item label="Customer Date">
-                {detailCustomer.customerDate ? new Date(detailCustomer.customerDate).toLocaleDateString() : '—'}
+                {formatDate(detailCustomer.customerDate)}
               </Descriptions.Item>
               <Descriptions.Item label="Date of Birth">
-                {detailCustomer.dateOfBirth ? new Date(detailCustomer.dateOfBirth).toLocaleDateString() : '—'}
+                {formatDate(detailCustomer.dateOfBirth)}
               </Descriptions.Item>
               <Descriptions.Item label="NRC No.">{detailCustomer.nrcNo || '—'}</Descriptions.Item>
               <Descriptions.Item label="Fax">{detailCustomer.fax || '—'}</Descriptions.Item>

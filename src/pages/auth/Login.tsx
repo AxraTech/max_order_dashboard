@@ -87,13 +87,12 @@ export const Login: React.FC = () => {
           <Form.Item
             name="identifier"
             rules={[
-              { required: true, message: 'Please input your Email!' },
-              { type: 'email', message: 'Please enter a valid email!' }
+              { required: true, message: 'Please input your Username or Email!' }
             ]}
           >
             <Input 
               prefix={<UserOutlined style={{ color: 'var(--text-secondary)' }} />} 
-              placeholder="Email address" 
+              placeholder="Username or Email" 
               style={{ borderRadius: '12px' }}
             />
           </Form.Item>

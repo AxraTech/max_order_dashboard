@@ -25,7 +25,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       const response = await api.post('/auth/login', credentials);
       const { user, accessToken, refreshToken } = response.data.data;
       
-      const ADMIN_ALLOWED_ROLES = ['SUPER_ADMIN', 'HQ_MANAGER', 'BRANCH_MANAGER', 'INVENTORY_OFFICER', 'FINANCE_OFFICER', 'VIEWER_AUDITOR', 'PURCHASE_ORDER'];
+      const ADMIN_ALLOWED_ROLES = ['SUPER_ADMIN', 'HQ_MANAGER', 'BRANCH_MANAGER', 'INVENTORY_OFFICER', 'FINANCE_OFFICER', 'VIEWER_AUDITOR', 'PURCHASE_ORDER', 'SR_ADMIN'];
       if (!ADMIN_ALLOWED_ROLES.includes(user.role?.name)) {
         sessionStorage.removeItem('maxorder_access_token');
         sessionStorage.removeItem('maxorder_refresh_token');

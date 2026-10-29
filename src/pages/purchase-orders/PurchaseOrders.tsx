@@ -10,6 +10,7 @@ import {
 import { api } from '../../services/api';
 import { CURRENCY } from '../../types/index';
 import dayjs from 'dayjs';
+import { formatDate, formatTime } from '../../utils/date';
 
 const { Title, Text } = Typography;
 
@@ -214,10 +215,18 @@ export const PurchaseOrders: React.FC = () => {
       key: 'warehouse',
     },
     {
-      title: 'Order Date',
+      title: 'Date',
       dataIndex: 'orderDate',
       key: 'orderDate',
-      render: (dateStr: string) => new Date(dateStr).toLocaleDateString(),
+      width: 105,
+      render: (dateStr: string) => formatDate(dateStr),
+    },
+    {
+      title: 'Time',
+      dataIndex: 'orderDate',
+      key: 'orderTime',
+      width: 95,
+      render: (dateStr: string) => formatTime(dateStr),
     },
     {
       title: 'Items',
@@ -575,12 +584,14 @@ export const PurchaseOrders: React.FC = () => {
               </Descriptions.Item>
               <Descriptions.Item label="Supplier">{detailPo.supplier.name} ({detailPo.supplier.code})</Descriptions.Item>
               <Descriptions.Item label="Target Warehouse">{detailPo.warehouse.name}</Descriptions.Item>
-              <Descriptions.Item label="Order Date">{new Date(detailPo.orderDate).toLocaleString()}</Descriptions.Item>
-              <Descriptions.Item label="Expected Delivery">{detailPo.expectedDate ? new Date(detailPo.expectedDate).toLocaleDateString() : 'Not specified'}</Descriptions.Item>
+              <Descriptions.Item label="Order Date">{formatDate(detailPo.orderDate)}</Descriptions.Item>
+              <Descriptions.Item label="Order Time">{formatTime(detailPo.orderDate)}</Descriptions.Item>
+              <Descriptions.Item label="Expected Delivery" span={2}>{detailPo.expectedDate ? formatDate(detailPo.expectedDate) : 'Not specified'}</Descriptions.Item>
               {detailPo.receivedDate && (
-                <Descriptions.Item label="Received Date" span={2}>
-                  <Text type="success" strong>{new Date(detailPo.receivedDate).toLocaleString()}</Text>
-                </Descriptions.Item>
+                <>
+                  <Descriptions.Item label="Received Date"><Text type="success" strong>{formatDate(detailPo.receivedDate)}</Text></Descriptions.Item>
+                  <Descriptions.Item label="Received Time"><Text type="success" strong>{formatTime(detailPo.receivedDate)}</Text></Descriptions.Item>
+                </>
               )}
               <Descriptions.Item label="Notes/Terms" span={2}>{detailPo.notes || '-'}</Descriptions.Item>
             </Descriptions>

@@ -89,7 +89,7 @@ export const App: React.FC = () => {
           <Routes>
             <Route path="/login" element={<Login />} />
             
-            <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'HQ_MANAGER', 'BRANCH_MANAGER', 'INVENTORY_OFFICER', 'FINANCE_OFFICER', 'VIEWER_AUDITOR', 'PURCHASE_ORDER']} />}>
+            <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'HQ_MANAGER', 'BRANCH_MANAGER', 'INVENTORY_OFFICER', 'FINANCE_OFFICER', 'VIEWER_AUDITOR', 'PURCHASE_ORDER', 'SR_ADMIN']} />}>
               <Route element={<AdminLayout />}>
                 <Route path="/" element={<Navigate to="/dashboard" replace />} />
                 <Route path="/dashboard" element={<Dashboard />} />

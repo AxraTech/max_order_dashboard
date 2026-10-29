@@ -11,7 +11,7 @@ import {
 } from '@ant-design/icons';
 import { api } from '../../services/api';
 import { useAuthStore } from '../../store/auth.store';
-import dayjs from 'dayjs';
+import { formatDate, formatTime } from '../../utils/date';
 
 const { Title, Text } = Typography;
 
@@ -263,8 +263,16 @@ export const Transfers: React.FC = () => {
     {
       title: 'Date',
       dataIndex: 'createdAt',
-      key: 'createdAt',
-      render: (d: string) => dayjs(d).format('DD MMM YYYY, HH:mm'),
+      key: 'createdAtDate',
+      width: 105,
+      render: (d: string) => formatDate(d),
+    },
+    {
+      title: 'Time',
+      dataIndex: 'createdAt',
+      key: 'createdAtTime',
+      width: 95,
+      render: (d: string) => formatTime(d),
     },
     {
       title: 'Actions',
@@ -564,7 +572,8 @@ export const Transfers: React.FC = () => {
               <Descriptions.Item label="Destination Warehouse">{detailTransfer.destinationWarehouse?.name} ({detailTransfer.destinationWarehouse?.branch?.name})</Descriptions.Item>
               <Descriptions.Item label="Requested By">{detailTransfer.creator?.firstName} {detailTransfer.creator?.lastName} ({detailTransfer.creator?.email})</Descriptions.Item>
               <Descriptions.Item label="Approver">{detailTransfer.approver ? `${detailTransfer.approver.firstName} ${detailTransfer.approver.lastName}` : '—'}</Descriptions.Item>
-              <Descriptions.Item label="Date Requested">{dayjs(detailTransfer.createdAt).format('DD MMM YYYY, HH:mm:ss')}</Descriptions.Item>
+              <Descriptions.Item label="Date Requested">{formatDate(detailTransfer.createdAt)}</Descriptions.Item>
+              <Descriptions.Item label="Time Requested">{formatTime(detailTransfer.createdAt)}</Descriptions.Item>
               <Descriptions.Item label="Notes" span={2}>{detailTransfer.notes || '-'}</Descriptions.Item>
             </Descriptions>
 

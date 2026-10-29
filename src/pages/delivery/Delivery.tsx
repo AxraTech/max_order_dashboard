@@ -5,6 +5,7 @@ import {
 import { CheckCircleOutlined, EyeOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons';
 import { api } from '../../services/api';
 import { CURRENCY } from '../../types/index';
+import { formatDate, formatTime } from '../../utils/date';
 
 const { Title, Text } = Typography;
 
@@ -148,6 +149,8 @@ export const Delivery: React.FC = () => {
             { title: 'Delivery Status', dataIndex: 'status', render: (s) => <Tag color={STATUS_COLOR[s]}>{s.replace(/_/g, ' ')}</Tag> },
             { title: 'Order Status', render: (_, r) => <Tag>{r.order?.status?.replace(/_/g, ' ')}</Tag> },
             { title: 'Amount', render: (_, r) => <Text strong>{Number(r.order?.totalAmount || 0).toLocaleString()} {CURRENCY.symbol}</Text> },
+            { title: 'Date', dataIndex: 'deliveredAt', key: 'deliveredDate', width: 105, render: (v) => formatDate(v) },
+            { title: 'Time', dataIndex: 'deliveredAt', key: 'deliveredTime', width: 95, render: (v) => formatTime(v) },
             {
               title: 'Actions',
               render: (_, r) => (
@@ -186,7 +189,8 @@ export const Delivery: React.FC = () => {
               <Descriptions.Item label="Customer">{detail.order.customer.name}</Descriptions.Item>
               <Descriptions.Item label="Branch">{detail.order.branch.name}</Descriptions.Item>
               <Descriptions.Item label="Status"><Tag color={STATUS_COLOR[detail.status]}>{detail.status.replace(/_/g, ' ')}</Tag></Descriptions.Item>
-              <Descriptions.Item label="Delivered At">{detail.deliveredAt ? new Date(detail.deliveredAt).toLocaleString() : '-'}</Descriptions.Item>
+              <Descriptions.Item label="Delivered Date">{formatDate(detail.deliveredAt)}</Descriptions.Item>
+              <Descriptions.Item label="Delivered Time">{formatTime(detail.deliveredAt)}</Descriptions.Item>
               <Descriptions.Item label="Notes">{detail.notes || '-'}</Descriptions.Item>
             </Descriptions>
             {(() => {

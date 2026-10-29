@@ -3,6 +3,7 @@ import { Button, Card, Input, message, Select, Space, Table, Tag, Typography } f
 import { ArrowLeftOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../../services/api';
+import { formatDate, formatTime } from '../../utils/date';
 
 const { Title, Text } = Typography;
 
@@ -103,7 +104,8 @@ export const AuditLogs: React.FC = () => {
           pagination={{ current: page, pageSize, total, showSizeChanger: true, onChange: (p, s) => { setPage(p); setPageSize(s); } }}
           scroll={{ x: 1050 }}
           columns={[
-            { title: 'Time', dataIndex: 'createdAt', render: (v) => new Date(v).toLocaleString() },
+            { title: 'Date', dataIndex: 'createdAt', key: 'date', width: 110, render: (v) => formatDate(v) },
+            { title: 'Time', dataIndex: 'createdAt', key: 'time', width: 100, render: (v) => formatTime(v) },
             { title: 'User', render: (_, r) => r.user ? <div><Text strong>{r.user.firstName} {r.user.lastName}</Text><br /><Text type="secondary">{r.user.email}</Text></div> : <Text type="secondary">System</Text> },
             { title: 'Role', render: (_, r) => <Text>{r.user?.role?.displayName || '-'}</Text> },
             { title: 'Module', dataIndex: 'module', render: (v) => <Tag>{v}</Tag> },

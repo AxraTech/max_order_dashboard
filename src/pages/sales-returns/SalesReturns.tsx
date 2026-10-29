@@ -10,7 +10,7 @@ import {
 import { api } from '../../services/api';
 import { CURRENCY } from '../../types/index';
 import { useAuthStore } from '../../store/auth.store';
-import dayjs from 'dayjs';
+import { formatDate, formatTime } from '../../utils/date';
 
 const { Title, Text } = Typography;
 
@@ -240,8 +240,15 @@ export const SalesReturns: React.FC = () => {
       title: 'Date',
       dataIndex: 'returnDate',
       key: 'returnDate',
-      width: 120,
-      render: (date: string) => dayjs(date).format('DD MMM YYYY'),
+      width: 105,
+      render: (date: string) => formatDate(date),
+    },
+    {
+      title: 'Time',
+      dataIndex: 'returnDate',
+      key: 'returnTime',
+      width: 95,
+      render: (date: string) => formatTime(date),
     },
     {
       title: 'Total Value',
@@ -396,7 +403,10 @@ export const SalesReturns: React.FC = () => {
           <Space direction="vertical" size="large" style={{ width: '100%', marginTop: '16px' }}>
             <Descriptions bordered size="small" column={2}>
               <Descriptions.Item label="Return Date">
-                {dayjs(detailReturn.returnDate).format('DD MMMM YYYY, hh:mm A')}
+                {formatDate(detailReturn.returnDate)}
+              </Descriptions.Item>
+              <Descriptions.Item label="Return Time">
+                {formatTime(detailReturn.returnDate)}
               </Descriptions.Item>
               <Descriptions.Item label="Status">
                 <Tag color={STATUS_COLOR[detailReturn.status]} style={{ fontWeight: 600 }}>

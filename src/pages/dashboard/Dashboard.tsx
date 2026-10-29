@@ -22,6 +22,7 @@ import {
 import { useAuthStore } from '../../store/auth.store';
 import * as dashboardApi from '../../services/dashboard.service';
 import dayjs from 'dayjs';
+import { formatDate } from '../../utils/date';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../../services/api';
 import { CURRENCY } from '../../types/index';
@@ -356,7 +357,7 @@ export const Dashboard: React.FC = () => {
                       {expiryAlerts.expired.slice(0, 5).map(item => (
                         <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px' }}>
                           <span style={{ color: '#111827', fontWeight: 500 }}>{item.name} <span style={{ fontSize: '11px', color: '#6b7280' }}>({item.sku})</span></span>
-                          <Tag color="red" style={{ border: 'none', borderRadius: '6px' }}>Expired {dayjs(item.expiryDate).format('YYYY-MM-DD')}</Tag>
+                          <Tag color="red" style={{ border: 'none', borderRadius: '6px' }}>Expired {formatDate(item.expiryDate)}</Tag>
                         </div>
                       ))}
                       {expiryAlerts.expired.length > 5 && (
@@ -376,7 +377,7 @@ export const Dashboard: React.FC = () => {
                       {expiryAlerts.expiringSoon.slice(0, 5).map(item => (
                         <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px' }}>
                           <span style={{ color: '#111827', fontWeight: 500 }}>{item.name} <span style={{ fontSize: '11px', color: '#6b7280' }}>({item.sku})</span></span>
-                          <Tag color="orange" style={{ border: 'none', borderRadius: '6px' }}>Expires {dayjs(item.expiryDate).format('YYYY-MM-DD')}</Tag>
+                          <Tag color="orange" style={{ border: 'none', borderRadius: '6px' }}>Expires {formatDate(item.expiryDate)}</Tag>
                         </div>
                       ))}
                       {expiryAlerts.expiringSoon.length > 5 && (

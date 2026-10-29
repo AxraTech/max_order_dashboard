@@ -15,6 +15,7 @@ import { api } from '../../services/api';
 import { CURRENCY } from '../../types/index';
 import { useAuthStore } from '../../store/auth.store';
 import dayjs from 'dayjs';
+import { formatDate, formatTime } from '../../utils/date';
 
 const { Title, Text } = Typography;
 
@@ -389,18 +390,25 @@ export const Invoices: React.FC = () => {
       title: 'Invoice Date',
       dataIndex: 'invoiceDate',
       key: 'invoiceDate',
-      width: 110,
-      render: (d: string) => d ? dayjs(d).format('DD MMM YYYY') : '—',
+      width: 105,
+      render: (d: string) => formatDate(d),
+    },
+    {
+      title: 'Invoice Time',
+      dataIndex: 'invoiceDate',
+      key: 'invoiceTime',
+      width: 95,
+      render: (d: string) => formatTime(d),
     },
     {
       title: 'Due Date',
       dataIndex: 'dueDate',
       key: 'dueDate',
-      width: 120,
+      width: 105,
       render: (d: string, r: InvoiceRecord) => (
         <Space size={4}>
           <Text style={{ color: isOverdue(d, r.balanceDue) ? '#DC2626' : undefined, fontWeight: isOverdue(d, r.balanceDue) ? 600 : undefined }}>
-            {d ? dayjs(d).format('DD MMM YYYY') : '—'}
+            {formatDate(d)}
           </Text>
           {isOverdue(d, r.balanceDue) && <Badge status="error" title="Overdue" />}
         </Space>

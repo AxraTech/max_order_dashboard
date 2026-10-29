@@ -10,6 +10,7 @@ import {
 } from '@ant-design/icons';
 import { api } from '../../services/api';
 import dayjs from 'dayjs';
+import { formatDate, formatTime } from '../../utils/date';
 
 const { Title, Text } = Typography;
 
@@ -284,11 +285,11 @@ export const Promotions: React.FC = () => {
         <div>
           <span style={{ fontSize: '13px' }}>
             <CalendarOutlined style={{ marginRight: '4px', color: '#9ca3af' }} />
-            {dayjs(record.startDate).format('DD MMM YYYY')}
+            {formatDate(record.startDate)}
           </span>
           <br />
           <span style={{ fontSize: '12px', color: '#6b7280' }}>
-            to {record.endDate ? dayjs(record.endDate).format('DD MMM YYYY') : 'Ongoing'}
+            to {record.endDate ? formatDate(record.endDate) : 'Ongoing'}
           </span>
         </div>
       ),
@@ -417,8 +418,8 @@ export const Promotions: React.FC = () => {
               {detailPromo.type === 'BUY_N_GET_M' ? 'Quantity Discount (10+1)' : 'Order Value Discount'}
             </Descriptions.Item>
             <Descriptions.Item label="Status">{getStatusTag(detailPromo)}</Descriptions.Item>
-            <Descriptions.Item label="Start Date">{dayjs(detailPromo.startDate).format('DD MMMM YYYY HH:mm A')}</Descriptions.Item>
-            <Descriptions.Item label="End Date">{detailPromo.endDate ? dayjs(detailPromo.endDate).format('DD MMMM YYYY HH:mm A') : 'Ongoing'}</Descriptions.Item>
+            <Descriptions.Item label="Start Date">{formatDate(detailPromo.startDate)} {formatTime(detailPromo.startDate)}</Descriptions.Item>
+            <Descriptions.Item label="End Date">{detailPromo.endDate ? `${formatDate(detailPromo.endDate)} ${formatTime(detailPromo.endDate)}` : 'Ongoing'}</Descriptions.Item>
             
             {detailPromo.type === 'BUY_N_GET_M' ? (
               <>

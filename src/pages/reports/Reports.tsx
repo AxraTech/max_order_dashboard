@@ -18,6 +18,7 @@ import { useAuthStore } from '../../store/auth.store';
 import { api } from '../../services/api';
 import { CURRENCY } from '../../types/index';
 import dayjs from 'dayjs';
+import { formatDate, formatTime } from '../../utils/date';
 import * as XLSX from 'xlsx-js-style';
 
 const { Title, Text } = Typography;
@@ -1303,7 +1304,8 @@ export const Reports: React.FC = () => {
                     columns={[
                       { title: 'Order No.', dataIndex: 'orderNumber', key: 'orderNumber', sorter: (a, b) => a.orderNumber.localeCompare(b.orderNumber), render: (v) => <Text code strong>{v}</Text> },
                       { title: 'Invoice No.', dataIndex: 'invoiceNumber', key: 'invoiceNumber', render: (v) => v ? <Text code style={{ color: '#10B981' }}>{v}</Text> : <Text type="secondary">—</Text> },
-                      { title: 'Order Date', dataIndex: 'orderDate', key: 'orderDate', sorter: (a, b) => a.orderDate.localeCompare(b.orderDate), render: (v) => dayjs(v).format('YYYY-MM-DD HH:mm') },
+                      { title: 'Date', dataIndex: 'orderDate', key: 'orderDate', width: 105, sorter: (a, b) => a.orderDate.localeCompare(b.orderDate), render: (v) => formatDate(v) },
+                      { title: 'Time', dataIndex: 'orderDate', key: 'orderTime', width: 95, render: (v) => formatTime(v) },
                       { title: 'Customer', key: 'customer', render: (_, r) => <div><Text strong>{r.customerName}</Text><br /><Text type="secondary" style={{ fontSize: 11 }}>{r.customerCode}</Text></div> },
                       { title: 'Sales Rep Name', dataIndex: 'salesRepName', key: 'salesRepName' },
                       { title: 'Sales Team', dataIndex: 'branchName', key: 'branchName' },
