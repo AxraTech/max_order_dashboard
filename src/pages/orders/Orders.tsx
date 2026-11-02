@@ -47,6 +47,10 @@ interface OrderRecord {
   paymentNotes?: string | null;
   branch: { name: string; code: string };
   customer: { name: string; code: string };
+  phone?: string | null;
+  deliveryAddress?: string | null;
+  srName?: string | null;
+  srPhone?: string | null;
   salesRep: { code: string; user: { firstName: string; lastName: string } };
   items: OrderItem[];
   statusHistory: Array<{ fromStatus: string | null; toStatus: string; reason: string | null; createdAt: string }>;
@@ -100,6 +104,8 @@ export const Orders: React.FC = () => {
         'Delivery Address': o.deliveryAddress || '',
         'Branch': o.branch?.name || '',
         'Sales Representative': o.salesRep?.user ? `${o.salesRep.user.firstName} ${o.salesRep.user.lastName}` : (o.salesRep?.code || '—'),
+        'SR Name': o.srName || '',
+        'SR Phone Number': o.srPhone || '',
         'Items Count': o.items?.length || 0,
         'Subtotal (MMK)': Math.round(Number(o.subtotal || 0)),
         'Discount (MMK)': Math.round(Number(o.discount || 0)),
@@ -260,11 +266,20 @@ export const Orders: React.FC = () => {
     {
       title: 'Sales Rep',
       key: 'rep',
-      width: 130,
+      width: 150,
       render: (_: any, r: OrderRecord) => {
         const s = r.salesRep;
-        if (!s) return <Text type="secondary">—</Text>;
-        return <Text>{s.user?.firstName} {s.user?.lastName}</Text>;
+        return (
+          <div>
+            {s ? <Text strong style={{ fontSize: '13px' }}>{s.user?.firstName} {s.user?.lastName}</Text> : <Text type="secondary">—</Text>}
+            {(r.srName || r.srPhone) && (
+              <div style={{ fontSize: '11px', color: '#4F46E5', fontWeight: 500, marginTop: '2px' }}>
+                {r.srName && <div>SR: {r.srName}</div>}
+                {r.srPhone && <div style={{ color: '#64748B' }}>Tel: {r.srPhone}</div>}
+              </div>
+            )}
+          </div>
+        );
       },
     },
     {
@@ -498,6 +513,16 @@ export const Orders: React.FC = () => {
               <Descriptions.Item label="Sales Rep">
                 {detailOrder.salesRep ? `${detailOrder.salesRep.user?.firstName} ${detailOrder.salesRep.user?.lastName}` : '—'}
               </Descriptions.Item>
+              {(detailOrder.srName || detailOrder.srPhone) && (
+                <>
+                  <Descriptions.Item label="SR Name">
+                    <Text strong style={{ color: '#4F46E5' }}>{detailOrder.srName || '—'}</Text>
+                  </Descriptions.Item>
+                  <Descriptions.Item label="SR Phone Number">
+                    <Text strong>{detailOrder.srPhone || '—'}</Text>
+                  </Descriptions.Item>
+                </>
+              )}
               <Descriptions.Item label="Date">{formatDate(detailOrder.orderDate)}</Descriptions.Item>
               <Descriptions.Item label="Time">{formatTime(detailOrder.orderDate)}</Descriptions.Item>
               <Descriptions.Item label="Subtotal">{Math.round(Number(detailOrder.subtotal)).toLocaleString()} {CURRENCY.symbol}</Descriptions.Item>
