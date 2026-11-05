@@ -116,7 +116,11 @@ export const Invoices: React.FC = () => {
   const [productOptions, setProductOptions] = useState<any[]>([]);
 
   const [editTotals, setEditTotals] = useState({ subtotal: 0, tax: 0, discount: 0, manualDiscount: 0, cashback: 0, partnerCommission: 0, totalAmount: 0, balanceDue: 0 });
-  const canEditInvoice = user?.role?.name === 'SUPER_ADMIN' || user?.role?.name === 'ACCOUNTANT';
+  const isSRAdmin = user?.role?.name === 'SR_ADMIN';
+  const isFinanceOrAdmin = ['SUPER_ADMIN', 'ACCOUNTANT', 'FINANCE_OFFICER', 'HQ_MANAGER', 'BRANCH_MANAGER'].includes(user?.role?.name || '');
+  const canEditInvoice = (isFinanceOrAdmin || isSRAdmin) && (
+    isSRAdmin ? ['PENDING_APPROVAL', 'DRAFT'].includes(detail?.status || '') : !['PAID', 'CANCELLED'].includes(detail?.status || '')
+  );
 
   type InvoiceCopyType = 'ORIGINAL' | 'WAREHOUSE' | 'SALES_REP';
   const [activeCopy, setActiveCopy] = useState<InvoiceCopyType>('ORIGINAL');
@@ -193,53 +197,79 @@ export const Invoices: React.FC = () => {
     } catch { message.error('Failed to load invoice'); }
   };
 
-  const openEditModal = () => {
-    if (!detail) return;
+  const openEditModal = (targetInvoice?: InvoiceRecord) => {
+    const inv = targetInvoice || detail;
+    if (!inv) return;
+    if (targetInvoice) setDetail(targetInvoice);
     editForm.resetFields();
     
-    const formItems = (detail.items || []).map(item => ({
-      description: item.description || item.productName || '',
-      quantity: item.quantity,
-      unitPrice: item.unitPrice,
-      totalPrice: item.totalPrice,
-    }));
+    const formItems = (inv.items || []).map(item => {
+      const desc = item.description || item.productName || '';
+      const itemType = desc.includes('(FOC)') ? 'FOC' : desc.includes('(Sample)') ? 'Sample' : 'Regular';
+      return {
+        description: desc,
+        itemType,
+        quantity: Number(item.quantity) || 1,
+        unitPrice: Number(item.unitPrice) || 0,
+        totalPrice: Number(item.totalPrice) || ((Number(item.quantity) || 1) * (Number(item.unitPrice) || 0)),
+      };
+    });
 
-    const initialPromoDiscount = Math.max(0, Number(detail.discount) - Number(detail.manualDiscount || 0));
+    const initialPromoDiscount = Math.max(0, Number(inv.discount) - Number(inv.manualDiscount || 0));
 
     editForm.setFieldsValue({
-      dueDate: dayjs(detail.dueDate),
-      tax: Number(detail.tax || 0),
+      dueDate: dayjs(inv.dueDate),
+      tax: Number(inv.tax || 0),
       discount: initialPromoDiscount,
-      manualDiscount: Number(detail.manualDiscount || 0),
-      cashback: Number(detail.cashback || 0),
-      partnerCommission: Number(detail.partnerCommission || 0),
+      manualDiscount: Number(inv.manualDiscount || 0),
+      cashback: Number(inv.cashback || 0),
+      partnerCommission: Number(inv.partnerCommission || 0),
       items: formItems,
     });
 
-    // Construct static merged product options for the dropdowns
-    const merged = [...products];
-    (detail.items || []).forEach(item => {
+    // Construct product options with accurate selling/dealer prices & active batch tags
+    const isDealer = (inv.customer as any)?.category === 'DEALER';
+    const merged = products.map((p: any) => {
+      const activeBatch = p.activeBatch?.batchNumber;
+      const batchSuffix = activeBatch && activeBatch !== 'N/A' ? ` (Batch: ${activeBatch})` : '';
+      const unitPrice = isDealer 
+        ? (Number(p.dealerPrice) || Number(p.sellingPrice) || 0)
+        : (Number(p.sellingPrice) || Number(p.basePrice) || 0);
+
+      return {
+        id: p.id,
+        name: p.name,
+        fullName: `${p.name}${batchSuffix}`,
+        sku: p.sku || p.code || '',
+        price: unitPrice,
+        batchNumber: activeBatch || 'N/A',
+      };
+    });
+
+    (inv.items || []).forEach(item => {
       const desc = item.description || item.productName || '';
-      if (desc && !products.some(p => p.name === desc)) {
+      if (desc && !merged.some((p: any) => p.name === desc || p.fullName === desc)) {
         merged.unshift({
           id: `custom-${item.id}`,
           name: desc,
+          fullName: desc,
           sku: 'custom',
-          price: Number(item.unitPrice),
+          price: Number(item.unitPrice) || 0,
+          batchNumber: 'N/A',
         });
       }
     });
     setProductOptions(merged);
 
     setEditTotals({
-      subtotal: Number(detail.subtotal),
-      tax: Number(detail.tax || 0),
+      subtotal: Number(inv.subtotal),
+      tax: Number(inv.tax || 0),
       discount: initialPromoDiscount,
-      manualDiscount: Number(detail.manualDiscount || 0),
-      cashback: Number(detail.cashback || 0),
-      partnerCommission: Number(detail.partnerCommission || 0),
-      totalAmount: Number(detail.totalAmount),
-      balanceDue: Number(detail.balanceDue),
+      manualDiscount: Number(inv.manualDiscount || 0),
+      cashback: Number(inv.cashback || 0),
+      partnerCommission: Number(inv.partnerCommission || 0),
+      totalAmount: Number(inv.totalAmount),
+      balanceDue: Number(inv.balanceDue),
     });
 
     setEditOpen(true);
@@ -460,6 +490,10 @@ export const Invoices: React.FC = () => {
         }
         if (r.status === 'PENDING_APPROVAL') items.push({ key: 'approve', icon: <CheckCircleOutlined />, label: 'Approve' });
         if (r.status === 'APPROVED') items.push({ key: 'send', icon: <SendOutlined />, label: 'Send to Customer' });
+        const canEditThisRow = (isFinanceOrAdmin || isSRAdmin) && (
+          isSRAdmin ? ['PENDING_APPROVAL', 'DRAFT'].includes(r.status) : !['PAID', 'CANCELLED'].includes(r.status)
+        );
+        if (canEditThisRow) items.push({ key: 'edit', icon: <EditOutlined />, label: 'Edit Invoice' });
         if (!['PAID', 'CANCELLED', 'DRAFT'].includes(r.status)) items.push({ key: 'pay', icon: <DollarOutlined />, label: 'Record Payment' });
         if (!['PAID', 'CANCELLED'].includes(r.status)) items.push({ key: 'cancel', icon: <CloseCircleOutlined />, label: 'Cancel Invoice', danger: true });
 
@@ -469,6 +503,18 @@ export const Invoices: React.FC = () => {
             case 'view-warehouse': loadDetail(r.id, 'WAREHOUSE'); break;
             case 'view-sr': loadDetail(r.id, 'SALES_REP'); break;
             case 'view': loadDetail(r.id); break;
+            case 'edit':
+              (async () => {
+                try {
+                  const res = await api.get(`/invoices/${r.id}`);
+                  if (res.data.success) {
+                    openEditModal(res.data.data);
+                  }
+                } catch {
+                  message.error('Failed to load invoice details');
+                }
+              })();
+              break;
             case 'approve': updateStatus(r, 'APPROVED'); break;
             case 'send': updateStatus(r, 'SENT'); break;
             case 'pay':
@@ -1174,7 +1220,7 @@ export const Invoices: React.FC = () => {
                 <Button
                   type="default"
                   icon={<EditOutlined />}
-                  onClick={openEditModal}
+                  onClick={() => openEditModal()}
                   style={{ borderRadius: '10px', height: '40px', fontWeight: 600, borderColor: '#4F46E5', color: '#4F46E5' }}
                 >
                   Edit Invoice
@@ -1333,7 +1379,18 @@ export const Invoices: React.FC = () => {
                         optionFilterProp="label"
                         onChange={(_, option: any) => {
                           if (option) {
-                            editForm.setFieldValue(['items', name, 'unitPrice'], Number(option.price) || 0);
+                            const currentType = editForm.getFieldValue(['items', name, 'itemType']) || 'Regular';
+                            let finalDesc = option.value;
+                            let finalPrice = Number(option.price) || 0;
+                            if (currentType === 'FOC') {
+                              finalDesc = `${option.value} (FOC)`;
+                              finalPrice = 0;
+                            } else if (currentType === 'Sample') {
+                              finalDesc = `${option.value} (Sample)`;
+                              finalPrice = 0;
+                            }
+                            editForm.setFieldValue(['items', name, 'description'], finalDesc);
+                            editForm.setFieldValue(['items', name, 'unitPrice'], finalPrice);
                             handleFormValuesChange(null, editForm.getFieldsValue());
                           }
                         }}
@@ -1351,7 +1408,14 @@ export const Invoices: React.FC = () => {
                       name={[name, 'quantity']}
                       rules={[{ required: true, message: 'Qty required' }]}
                     >
-                      <InputNumber placeholder="Qty" min={1} style={{ width: 80, borderRadius: '8px' }} />
+                      <InputNumber 
+                        placeholder="Qty" 
+                        min={1} 
+                        style={{ width: 80, borderRadius: '8px' }} 
+                        onChange={() => {
+                          setTimeout(() => handleFormValuesChange(null, editForm.getFieldsValue()), 0);
+                        }}
+                      />
                     </Form.Item>
 
                     <Form.Item
@@ -1359,22 +1423,40 @@ export const Invoices: React.FC = () => {
                       name={[name, 'unitPrice']}
                       rules={[{ required: true, message: 'Price required' }]}
                     >
-                      <InputNumber placeholder="Price" min={0} style={{ width: 110, borderRadius: '8px' }} addonAfter="K" />
+                      <InputNumber 
+                        placeholder="Price" 
+                        min={0} 
+                        style={{ width: 110, borderRadius: '8px' }} 
+                        addonAfter="K" 
+                        onChange={() => {
+                          setTimeout(() => handleFormValuesChange(null, editForm.getFieldsValue()), 0);
+                        }}
+                      />
                     </Form.Item>
 
-                    <Form.Item>
+                    <Form.Item
+                      {...restField}
+                      name={[name, 'itemType']}
+                      initialValue="Regular"
+                    >
                       <Select 
                         style={{ width: 100 }} 
                         placeholder="Type"
                         onChange={(val) => {
                           const currentDesc = editForm.getFieldValue(['items', name, 'description']) || '';
-                          let newDesc = currentDesc.replace(/\(FOC\)/g, '').replace(/\(Sample\)/g, '').trim();
+                          let baseDesc = currentDesc.replace(/\s*\((FOC|Sample)\)/gi, '').trim();
+                          let newDesc = baseDesc;
                           if (val === 'FOC') {
-                            newDesc = `${newDesc} (FOC)`;
+                            newDesc = `${baseDesc} (FOC)`;
                             editForm.setFieldValue(['items', name, 'unitPrice'], 0);
                           } else if (val === 'Sample') {
-                            newDesc = `${newDesc} (Sample)`;
+                            newDesc = `${baseDesc} (Sample)`;
                             editForm.setFieldValue(['items', name, 'unitPrice'], 0);
+                          } else if (val === 'Regular') {
+                            const matched = productOptions.find((p: any) => p.name === baseDesc || p.fullName === baseDesc);
+                            if (matched && matched.price) {
+                              editForm.setFieldValue(['items', name, 'unitPrice'], matched.price);
+                            }
                           }
                           editForm.setFieldValue(['items', name, 'description'], newDesc);
                           handleFormValuesChange(null, editForm.getFieldsValue());
@@ -1386,12 +1468,33 @@ export const Invoices: React.FC = () => {
                       </Select>
                     </Form.Item>
 
-                    <Button type="link" danger onClick={() => remove(name)}>Delete</Button>
+                    <Button 
+                      type="link" 
+                      danger 
+                      onClick={() => {
+                        remove(name);
+                        setTimeout(() => {
+                          handleFormValuesChange(null, editForm.getFieldsValue());
+                        }, 0);
+                      }}
+                    >
+                      Delete
+                    </Button>
                   </Space>
                 ))}
                 <Form.Item>
-                  <Button type="dashed" onClick={() => add({ description: '', quantity: 1, unitPrice: 0, totalPrice: 0 })} block style={{ borderRadius: '10px' }}>
-                    Add Product Item
+                  <Button 
+                    type="dashed" 
+                    onClick={() => {
+                      add({ description: '', itemType: 'Regular', quantity: 1, unitPrice: 0, totalPrice: 0 });
+                      setTimeout(() => {
+                        handleFormValuesChange(null, editForm.getFieldsValue());
+                      }, 0);
+                    }} 
+                    block 
+                    style={{ borderRadius: '10px' }}
+                  >
+                    + Add Product Item
                   </Button>
                 </Form.Item>
               </>

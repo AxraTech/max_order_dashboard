@@ -10,7 +10,7 @@ import {
   DeleteOutlined, PhoneOutlined, MailOutlined, CheckCircleOutlined,
   UploadOutlined, DownloadOutlined, InboxOutlined, CheckCircleFilled,
   CalendarOutlined, EnvironmentOutlined, DollarOutlined,
-  UserOutlined, IdcardOutlined, FileExcelOutlined,
+  UserOutlined, IdcardOutlined, FileExcelOutlined, ShopOutlined,
 } from '@ant-design/icons';
 import * as XLSX from 'xlsx';
 import dayjs from 'dayjs';
@@ -81,6 +81,13 @@ interface CustomerRecord {
   division?: string | null;
   customerDate?: string | null;
   branchCode?: string | null;
+  dealerPercentage?: number | null;
+  productPrices?: Array<{
+    id?: string;
+    productId: string;
+    price: number;
+    product?: { id: string; name: string; sku: string; sellingPrice: number; uom: string };
+  }>;
   territory: TerritoryInfo | null;
   branch: BranchInfo | null;
   creditLimit: CreditLimitInfo | null;
@@ -122,6 +129,25 @@ export const Customers: React.FC = () => {
   const [editingCustomer, setEditingCustomer] = useState<CustomerRecord | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [form] = Form.useForm();
+
+  // Catalog Products & Mall Pricing State
+  const [catalogProducts, setCatalogProducts] = useState<any[]>([]);
+  const [mallPrices, setMallPrices] = useState<Array<{ productId: string; name: string; sku: string; basePrice: number; price: number }>>([]);
+  const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
+  const [customPriceInput, setCustomPriceInput] = useState<number | null>(null);
+
+  const fetchCatalogProducts = useCallback(async () => {
+    try {
+      const res = await api.get('/products', { params: { limit: 1000 } });
+      if (res.data.success) {
+        setCatalogProducts(res.data.data);
+      }
+    } catch { }
+  }, []);
+
+  useEffect(() => {
+    fetchCatalogProducts();
+  }, [fetchCatalogProducts]);
 
   // Import Modal State
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
@@ -313,9 +339,13 @@ export const Customers: React.FC = () => {
   // ---- Create / Edit ----
   const openCreateModal = () => {
     setEditingCustomer(null);
+    setMallPrices([]);
+    setSelectedProductId(null);
+    setCustomPriceInput(null);
     form.resetFields();
     form.setFieldsValue({
       category: 'REGULAR',
+      dealerPercentage: 0,
       paymentTermDays: 30,
       creditTerm: '30D',
       receiptType: 'Invoice',
@@ -333,6 +363,33 @@ export const Customers: React.FC = () => {
 
   const openEditModal = (record: CustomerRecord) => {
     setEditingCustomer(record);
+    setSelectedProductId(null);
+    setCustomPriceInput(null);
+
+    // Initialize mall prices
+    if (record.productPrices && record.productPrices.length > 0) {
+      setMallPrices(record.productPrices.map(pp => ({
+        productId: pp.productId,
+        name: pp.product?.name || (catalogProducts.find(p => p.id === pp.productId)?.name) || 'Product',
+        sku: pp.product?.sku || (catalogProducts.find(p => p.id === pp.productId)?.sku) || '',
+        basePrice: Number(pp.product?.sellingPrice || (catalogProducts.find(p => p.id === pp.productId)?.sellingPrice) || 0),
+        price: Number(pp.price),
+      })));
+    } else {
+      setMallPrices([]);
+      api.get(`/customers/${record.id}/product-prices`).then(res => {
+        if (res.data.success && Array.isArray(res.data.data)) {
+          setMallPrices(res.data.data.map((pp: any) => ({
+            productId: pp.productId,
+            name: pp.product?.name || 'Product',
+            sku: pp.product?.sku || '',
+            basePrice: Number(pp.product?.sellingPrice || 0),
+            price: Number(pp.price),
+          })));
+        }
+      }).catch(() => {});
+    }
+
     form.setFieldsValue({
       name: record.name,
       contactPerson: record.contactPerson,
@@ -344,6 +401,7 @@ export const Customers: React.FC = () => {
       region: record.region,
       district: record.district,
       category: record.category,
+      dealerPercentage: record.dealerPercentage ? Number(record.dealerPercentage) : 0,
       mainChannelId: record.mainChannel?.id,
       subChannelId: record.subChannel?.id,
       paymentTermDays: record.paymentTermDays,
@@ -372,6 +430,8 @@ export const Customers: React.FC = () => {
       setSubmitting(true);
       const payload = {
         ...values,
+        dealerPercentage: values.dealerPercentage !== undefined && values.dealerPercentage !== null ? Number(values.dealerPercentage) : 0,
+        customProductPrices: mallPrices.map(mp => ({ productId: mp.productId, price: Number(mp.price) })),
         dateOfBirth: values.dateOfBirth ? (values.dateOfBirth.toISOString ? values.dateOfBirth.toISOString() : values.dateOfBirth) : null,
         customerDate: values.customerDate ? (values.customerDate.toISOString ? values.customerDate.toISOString() : values.customerDate) : null,
       };
@@ -466,10 +526,21 @@ export const Customers: React.FC = () => {
             <Tag color={
               record.category === 'VIP' ? 'gold' :
                 record.category === 'WHOLESALE' ? 'blue' :
-                  record.category === 'DEALER' ? 'purple' : 'default'
+                  record.category === 'DEALER' ? 'purple' :
+                    record.category === 'MALL' ? 'cyan' : 'default'
             } style={{ borderRadius: '6px', fontSize: '11px', fontWeight: 600, border: 'none', margin: 0 }}>
               {record.category}
             </Tag>
+            {record.dealerPercentage && Number(record.dealerPercentage) > 0 ? (
+              <Tag color="geekblue" style={{ borderRadius: '6px', fontSize: '11px', fontWeight: 600, border: 'none', margin: 0 }}>
+                +{Number(record.dealerPercentage)}%
+              </Tag>
+            ) : null}
+            {record.productPrices && record.productPrices.length > 0 ? (
+              <Tag color="orange" style={{ borderRadius: '6px', fontSize: '11px', fontWeight: 600, border: 'none', margin: 0 }}>
+                {record.productPrices.length} Custom Prices
+              </Tag>
+            ) : null}
             {record.contactPerson && (
               <Text type="secondary" style={{ fontSize: '12px', whiteSpace: 'nowrap' }}>
                 👤 {record.contactPerson}
@@ -791,6 +862,7 @@ export const Customers: React.FC = () => {
               <Select.Option value="VIP">VIP</Select.Option>
               <Select.Option value="WHOLESALE">Wholesale</Select.Option>
               <Select.Option value="DEALER">Dealer</Select.Option>
+              <Select.Option value="MALL">Mall</Select.Option>
             </Select>
           </Col>
           <Col xs={12} sm={6} md={4}>
@@ -881,7 +953,7 @@ export const Customers: React.FC = () => {
                 children: (
                   <div style={{ paddingTop: '8px' }}>
                     <Row gutter={16}>
-                      <Col span={14}>
+                      <Col span={10}>
                         <Form.Item
                           name="name"
                           label="Customer Name"
@@ -890,14 +962,30 @@ export const Customers: React.FC = () => {
                           <Input placeholder="e.g. Academy Clinic (AL)" style={{ borderRadius: '8px' }} />
                         </Form.Item>
                       </Col>
-                      <Col span={10}>
+                      <Col span={7}>
                         <Form.Item name="category" label="Category" rules={[{ required: true }]}>
                           <Select style={{ borderRadius: '8px' }}>
                             <Select.Option value="REGULAR">Regular</Select.Option>
                             <Select.Option value="VIP">VIP</Select.Option>
                             <Select.Option value="WHOLESALE">Wholesale</Select.Option>
                             <Select.Option value="DEALER">Dealer</Select.Option>
+                            <Select.Option value="MALL">Mall</Select.Option>
                           </Select>
+                        </Form.Item>
+                      </Col>
+                      <Col span={7}>
+                        <Form.Item
+                          name="dealerPercentage"
+                          label="Dealer % Markup"
+                          tooltip="Adds this percentage to all products during ordering for this customer (e.g. 10 adds 10% to 10,000 = 11,000)"
+                        >
+                          <InputNumber
+                            min={0}
+                            max={100}
+                            placeholder="e.g. 10"
+                            addonAfter="%"
+                            style={{ width: '100%', borderRadius: '8px' }}
+                          />
                         </Form.Item>
                       </Col>
                     </Row>
@@ -1194,6 +1282,159 @@ export const Customers: React.FC = () => {
                         </Form.Item>
                       </Col>
                     </Row>
+                  </div>
+                ),
+              },
+              {
+                key: 'mall_pricing',
+                label: (
+                  <span>
+                    <ShopOutlined /> Mall Product Pricing {mallPrices.length > 0 && <Badge count={mallPrices.length} style={{ backgroundColor: '#4F46E5', marginLeft: 6 }} />}
+                  </span>
+                ),
+                children: (
+                  <div style={{ paddingTop: '8px' }}>
+                    <Alert
+                      message="Custom Product Pricing for this Mall / Customer"
+                      description="Select products from the catalog to assign special contract prices for this specific mall/customer. These custom prices only affect orders for this customer and do NOT modify master product catalog prices or other customers."
+                      type="info"
+                      showIcon
+                      style={{ marginBottom: 16, borderRadius: '8px' }}
+                    />
+
+                    <Card style={{ marginBottom: 16, borderRadius: '8px', background: '#F8FAFC' }} size="small">
+                      <Row gutter={12} align="middle">
+                        <Col span={12}>
+                          <Text strong style={{ fontSize: '12px', display: 'block', marginBottom: '4px' }}>Choose Product</Text>
+                          <Select
+                            showSearch
+                            placeholder="Search & choose product..."
+                            style={{ width: '100%', borderRadius: '8px' }}
+                            optionFilterProp="label"
+                            value={selectedProductId}
+                            onChange={(val) => {
+                              setSelectedProductId(val);
+                              const prod = catalogProducts.find(p => p.id === val);
+                              if (prod) {
+                                setCustomPriceInput(Number(prod.sellingPrice) || 0);
+                              }
+                            }}
+                          >
+                            {catalogProducts
+                              .filter(p => !mallPrices.some(mp => mp.productId === p.id))
+                              .map(p => (
+                                <Select.Option key={p.id} value={p.id} label={`${p.name} (${p.sku || p.code})`}>
+                                  {p.name} — Regular: {Number(p.sellingPrice).toLocaleString()} {CURRENCY.symbol}
+                                </Select.Option>
+                              ))}
+                          </Select>
+                        </Col>
+                        <Col span={8}>
+                          <Text strong style={{ fontSize: '12px', display: 'block', marginBottom: '4px' }}>Mall Custom Price ({CURRENCY.symbol})</Text>
+                          <InputNumber
+                            min={0}
+                            style={{ width: '100%', borderRadius: '8px' }}
+                            placeholder="Price in MMK"
+                            addonAfter="K"
+                            value={customPriceInput}
+                            onChange={(val) => setCustomPriceInput(val)}
+                          />
+                        </Col>
+                        <Col span={4} style={{ paddingTop: '20px' }}>
+                          <Button
+                            type="primary"
+                            icon={<PlusOutlined />}
+                            disabled={!selectedProductId || customPriceInput === null}
+                            onClick={() => {
+                              const prod = catalogProducts.find(p => p.id === selectedProductId);
+                              if (prod && customPriceInput !== null) {
+                                setMallPrices(prev => [
+                                  ...prev,
+                                  {
+                                    productId: prod.id,
+                                    name: prod.name,
+                                    sku: prod.sku || prod.code,
+                                    basePrice: Number(prod.sellingPrice),
+                                    price: customPriceInput,
+                                  }
+                                ]);
+                                setSelectedProductId(null);
+                                setCustomPriceInput(null);
+                              }
+                            }}
+                            style={{
+                              width: '100%',
+                              borderRadius: '8px',
+                              background: (!selectedProductId || customPriceInput === null) ? undefined : '#4F46E5',
+                              borderColor: (!selectedProductId || customPriceInput === null) ? undefined : '#4F46E5',
+                              color: (!selectedProductId || customPriceInput === null) ? undefined : '#FFFFFF',
+                              fontWeight: 600,
+                            }}
+                          >
+                            Add
+                          </Button>
+                        </Col>
+                      </Row>
+                    </Card>
+
+                    <Table
+                      dataSource={mallPrices}
+                      rowKey="productId"
+                      pagination={false}
+                      size="small"
+                      columns={[
+                        {
+                          title: 'Product',
+                          dataIndex: 'name',
+                          render: (text: string, record: any) => (
+                            <Space direction="vertical" size={0}>
+                              <Text strong style={{ fontSize: '13px' }}>{text}</Text>
+                              <Text type="secondary" style={{ fontSize: '11px' }}>SKU: {record.sku}</Text>
+                            </Space>
+                          ),
+                        },
+                        {
+                          title: 'Standard Price',
+                          dataIndex: 'basePrice',
+                          width: 140,
+                          render: (v: number) => `${Number(v).toLocaleString()} ${CURRENCY.symbol}`,
+                        },
+                        {
+                          title: 'Mall Special Price',
+                          dataIndex: 'price',
+                          width: 180,
+                          render: (val: number, record: any) => (
+                            <InputNumber
+                              min={0}
+                              value={val}
+                              addonAfter="K"
+                              style={{ width: 140, borderRadius: '6px' }}
+                              onChange={(newPrice) => {
+                                if (newPrice !== null) {
+                                  setMallPrices(prev => prev.map(item => item.productId === record.productId ? { ...item, price: newPrice } : item));
+                                }
+                              }}
+                            />
+                          ),
+                        },
+                        {
+                          title: 'Action',
+                          key: 'action',
+                          width: 80,
+                          render: (_: any, record: any) => (
+                            <Button
+                              type="text"
+                              danger
+                              icon={<DeleteOutlined />}
+                              onClick={() => {
+                                setMallPrices(prev => prev.filter(item => item.productId !== record.productId));
+                              }}
+                            />
+                          ),
+                        },
+                      ]}
+                      locale={{ emptyText: 'No mall-specific custom prices configured yet. Choose a product above to add special pricing.' }}
+                    />
                   </div>
                 ),
               },

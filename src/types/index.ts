@@ -72,7 +72,7 @@ export interface BranchSummary {
   name: string;
 }
 
-export type CustomerCategory = 'REGULAR' | 'VIP' | 'WHOLESALE' | 'DEALER';
+export type CustomerCategory = 'REGULAR' | 'VIP' | 'WHOLESALE' | 'DEALER' | 'MALL';
 export type SalesRepType = 'SR' | 'MSR';
 export type PriceListType = 'BRANCH' | 'DEALER' | 'PROMOTION';
 
